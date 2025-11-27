@@ -1,0 +1,38 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: oauth2-proxy-virtualservice
+  namespace: auth
+  labels:
+    app: oauth2-proxy
+    app.kubernetes.io/name: oauth2-proxy
+    app.kubernetes.io/component: authentication
+spec:
+  hosts:
+  - "auth.cat-herding.net"
+  gateways:
+  - istio-system/cat-herding-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/oauth2/"
+    - uri:
+        prefix: "/ping"
+    route:
+    - destination:
+        host: oauth2-proxy.auth.svc.cluster.local
+        port:
+          number: 4180
+    timeout: 10s
+    retries:
+      attempts: 3
+      perTryTimeout: 3s
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: oauth2-proxy.auth.svc.cluster.local
+        port:
+          number: 4180

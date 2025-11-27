@@ -1,0 +1,176 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: auth
+  labels:
+    app: oauth2-proxy
+    app.kubernetes.io/name: oauth2-proxy
+    app.kubernetes.io/component: authentication
+    version: v7.6.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app: oauth2-proxy
+        version: v7.6.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "44180"
+    spec:
+      serviceAccountName: oauth2-proxy
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 2000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: oauth2-proxy
+        image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 4180
+          protocol: TCP
+        - name: metrics
+          containerPort: 44180
+          protocol: TCP
+        env:
+        - name: OAUTH2_PROXY_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secret
+              key: client-id
+        - name: OAUTH2_PROXY_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secret
+              key: client-secret
+        - name: OAUTH2_PROXY_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secret
+              key: cookie-secret
+        args:
+        # Provider configuration - GitHub
+        - --provider=github
+        # For other providers, replace with:
+        # Google: --provider=google
+        # OIDC: --provider=oidc --oidc-issuer-url=https://your-issuer
+        # Azure: --provider=azure --azure-tenant=your-tenant-id
+        
+        # Cookie configuration for SSO across *.cat-herding.net
+        - --cookie-name=_oauth2_proxy
+        - --cookie-domain=.cat-herding.net
+        - --cookie-secure=true
+        - --cookie-httponly=true
+        - --cookie-samesite=lax
+        - --cookie-expire=168h
+        - --cookie-refresh=1h
+        
+        # Email/user configuration
+        - --email-domain=*
+        - --pass-access-token=true
+        - --pass-authorization-header=true
+        - --pass-user-headers=true
+        - --set-authorization-header=true
+        - --set-xauthrequest=true
+        
+        # Proxy configuration for ext_authz mode
+        - --http-address=0.0.0.0:4180
+        - --metrics-address=0.0.0.0:44180
+        - --reverse-proxy=true
+        - --upstream=static://202  # Return 202 for auth checks
+        
+        # Whitelist OAuth callback paths (no auth required)
+        - --skip-auth-route=^/oauth2/
+        
+        # Redirect URL
+        - --redirect-url=https://auth.cat-herding.net/oauth2/callback
+        
+        # Whitelist domains
+        - --whitelist-domain=.cat-herding.net
+        
+        # Logging
+        - --logging-filename=
+        - --logging-max-size=100
+        - --logging-max-age=7
+        - --logging-local-time=true
+        - --logging-compress=false
+        - --standard-logging=true
+        - --auth-logging=true
+        - --request-logging=true
+        - --request-logging-format=[{{.Timestamp}}] {{.Client}} {{.Host}} {{.RequestMethod}} {{.Upstream}} {{.RequestURI}} {{.Protocol}} {{.UserAgent}} {{.StatusCode}} {{.ResponseSize}} {{.RequestTime}}
+        
+        # Security
+        - --ssl-insecure-skip-verify=false
+        - --ssl-upstream-insecure-skip-verify=false
+        - --force-https=false  # Istio handles TLS termination
+        
+        # Session storage (cookie-based for simplicity)
+        - --session-store-type=cookie
+        
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 2000
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - oauth2-proxy
+              topologyKey: kubernetes.io/hostname

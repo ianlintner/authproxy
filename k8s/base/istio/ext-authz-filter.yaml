@@ -1,0 +1,81 @@
+---
+# EnvoyFilter to enable external authorization (ext_authz) via oauth2-proxy
+# This filter intercepts requests at the Istio ingress gateway and checks
+# authentication with oauth2-proxy before forwarding to backend services
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: ext-authz
+  namespace: istio-system
+  labels:
+    app.kubernetes.io/name: ext-authz-filter
+    app.kubernetes.io/component: authentication
+spec:
+  # Apply to ingress gateway workload
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  
+  configPatches:
+  # Add the ext_authz HTTP filter before the router filter
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          filter:
+            name: envoy.filters.network.http_connection_manager
+            subFilter:
+              name: envoy.filters.http.router
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.ext_authz
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.HttpService
+          http_service:
+            server_uri:
+              uri: http://oauth2-proxy.auth.svc.cluster.local:4180
+              cluster: outbound|4180||oauth2-proxy.auth.svc.cluster.local
+              timeout: 5s
+            
+            # Path prefix for auth check
+            path_prefix: /oauth2/auth
+            
+            # Authorization request headers to send to oauth2-proxy
+            authorization_request:
+              allowed_headers:
+                patterns:
+                - exact: "cookie"
+                - exact: "authorization"
+                - exact: "x-forwarded-access-token"
+                - exact: "x-forwarded-user"
+                - exact: "x-forwarded-email"
+                - exact: "x-forwarded-proto"
+                - exact: "x-forwarded-host"
+                - exact: "x-forwarded-uri"
+                - prefix: "x-auth-request"
+            
+            # Authorization response headers to pass to upstream service
+            authorization_response:
+              allowed_upstream_headers:
+                patterns:
+                - exact: "x-auth-request-user"
+                - exact: "x-auth-request-email"
+                - exact: "x-auth-request-preferred-username"
+                - exact: "x-auth-request-access-token"
+                - exact: "authorization"
+              allowed_client_headers:
+                patterns:
+                - exact: "set-cookie"
+                - exact: "location"
+          
+          # Failure behavior
+          failure_mode_allow: false
+          
+          # Status on error
+          status_on_error:
+            code: 503
+          
+          # Clear route cache to handle redirects
+          clear_route_cache: true

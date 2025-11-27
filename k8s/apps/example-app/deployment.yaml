@@ -1,0 +1,111 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-app
+  namespace: example-app
+  labels:
+    app: example-app
+    # THIS LABEL ENABLES AUTHENTICATION via oauth2-proxy
+    auth.cat-herding.net/enabled: "true"
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: example-app
+  template:
+    metadata:
+      labels:
+        app: example-app
+        version: v1
+        # Propagate the auth label to pods for potential future use
+        auth.cat-herding.net/enabled: "true"
+      annotations:
+        # Annotation to document what auth protection is enabled
+        auth.cat-herding.net/provider: "oauth2-proxy"
+        auth.cat-herding.net/domain: "example-app.cat-herding.net"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: app
+        # Simple echo server that displays request headers
+        image: hashicorp/http-echo:latest
+        args:
+        - -text=Hello from Example App! Check headers for user identity.
+        - -listen=:8080
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        # These headers will be injected by oauth2-proxy after authentication
+        - name: AUTH_USER_HEADER
+          value: "X-Auth-Request-User"
+        - name: AUTH_EMAIL_HEADER
+          value: "X-Auth-Request-Email"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+---
+# Example: More realistic app that reads user identity
+# Uncomment and customize for your actual application
+#
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: my-web-app
+#   namespace: example-app
+#   labels:
+#     app: my-web-app
+#     auth.cat-herding.net/enabled: "true"
+# spec:
+#   replicas: 2
+#   selector:
+#     matchLabels:
+#       app: my-web-app
+#   template:
+#     metadata:
+#       labels:
+#         app: my-web-app
+#         auth.cat-herding.net/enabled: "true"
+#     spec:
+#       containers:
+#       - name: app
+#         image: your-registry/your-app:latest
+#         ports:
+#         - containerPort: 3000
+#         env:
+#         # Your app can read these headers to get user identity
+#         - name: AUTH_ENABLED
+#           value: "true"
+#         # Example code to read headers (Node.js/Express):
+#         # const userEmail = req.headers['x-auth-request-email'];
+#         # const userName = req.headers['x-auth-request-user'];
+#         # const preferredUsername = req.headers['x-auth-request-preferred-username'];

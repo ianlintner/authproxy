@@ -1,0 +1,231 @@
+# AKS SSO Social Login Proxy Gateway
+
+Centralized authentication gateway for AKS cluster `bigboy` using Istio ext_authz and oauth2-proxy. Enables SSO across `*.cat-herding.net` subdomains with social login providers (GitHub, Google, LinkedIn, Microsoft).
+
+## 🚀 Quick Start
+
+```bash
+# 1. Configure your OAuth app credentials
+cp k8s/base/oauth2-proxy/secret.yaml.example k8s/base/oauth2-proxy/secret.yaml
+# Edit secret.yaml with your OAuth client ID and secret
+
+# 2. Deploy the auth infrastructure
+./scripts/setup.sh
+
+# 3. Add authentication to an existing app
+./scripts/add-app.sh myapp myapp-namespace 8080
+```
+
+Your app at `myapp.cat-herding.net` is now protected with social login!
+
+## 📋 Prerequisites
+
+- AKS cluster `bigboy` in resource group `nekoc` with Istio installed
+- cert-manager deployed in cluster
+- Wildcard DNS `*.cat-herding.net` pointing to Istio ingress gateway
+- Wildcard TLS certificate for `*.cat-herding.net` (managed by cert-manager)
+- OAuth application registered (GitHub, Google, Azure AD B2C, etc.)
+- `kubectl` configured for cluster access
+
+## 🏗️ Architecture
+
+```
+                                    ┌─────────────────────┐
+                                    │   Social IdP        │
+                                    │  (GitHub/Google/    │
+                                    │   LinkedIn/MS)      │
+                                    └──────────┬──────────┘
+                                               │
+                                               │ OAuth flow
+                                               │
+┌──────────────┐         ┌──────────────────────▼─────────────┐
+│              │         │  Istio Ingress Gateway             │
+│   Browser    │────────▶│  (*.cat-herding.net)               │
+│              │  HTTPS  │                                    │
+└──────────────┘         │  ┌──────────────────────────────┐ │
+                         │  │ ext_authz filter             │ │
+                         │  │ (EnvoyFilter)                │ │
+                         │  └───────────┬──────────────────┘ │
+                         └──────────────┼────────────────────┘
+                                        │ Auth check
+                                        │
+                         ┌──────────────▼────────────────┐
+                         │  oauth2-proxy                 │
+                         │  (auth namespace)             │
+                         │  - Port 4180: OAuth callback  │
+                         │  - Port 4181: Auth check API  │
+                         │  - Cookie: .cat-herding.net   │
+                         └──────────────┬────────────────┘
+                                        │ Authenticated
+                                        │
+                         ┌──────────────▼────────────────┐
+                         │  Backend Application          │
+                         │  (with auth label enabled)    │
+                         │  - Receives user headers      │
+                         └───────────────────────────────┘
+```
+
+## 🎯 How It Works
+
+1. **User requests protected app**: Browser → `https://myapp.cat-herding.net`
+2. **Istio ext_authz intercepts**: Envoy calls oauth2-proxy auth endpoint
+3. **Check session cookie**: oauth2-proxy validates `.cat-herding.net` cookie
+4. **If not authenticated**: Redirect to OAuth provider (GitHub, etc.)
+5. **After login**: Set session cookie, redirect back to app
+6. **If authenticated**: Inject user headers, forward to backend
+7. **SSO magic**: Cookie works across all `*.cat-herding.net` subdomains
+
+## 🔧 Configuration
+
+### Enable Auth for Your App
+
+Add this label to your Deployment:
+
+```yaml
+metadata:
+  labels:
+    auth.cat-herding.net/enabled: "true"
+```
+
+Then create an AuthorizationPolicy and VirtualService (see `k8s/apps/example-app/`).
+
+### Access User Identity in Your App
+
+oauth2-proxy injects headers with user information:
+
+```go
+email := r.Header.Get("X-Auth-Request-Email")
+user := r.Header.Get("X-Auth-Request-User") 
+preferredUsername := r.Header.Get("X-Auth-Request-Preferred-Username")
+```
+
+### Configure OAuth Provider
+
+Edit `k8s/base/oauth2-proxy/secret.yaml` with your provider credentials:
+
+- **GitHub**: Create OAuth App at https://github.com/settings/developers
+- **Google**: Create OAuth 2.0 Client at https://console.cloud.google.com
+- **Azure AD B2C**: Create app registration in Azure Portal
+- **Auth0**: Create application in Auth0 dashboard
+
+**Callback URL**: `https://auth.cat-herding.net/oauth2/callback`
+
+## 📁 Project Structure
+
+```
+authproxy/
+├── k8s/
+│   ├── base/
+│   │   ├── namespace.yaml              # Auth namespace
+│   │   ├── oauth2-proxy/               # Central auth proxy
+│   │   │   ├── deployment.yaml
+│   │   │   ├── service.yaml
+│   │   │   ├── secret.yaml.example
+│   │   │   └── configmap.yaml
+│   │   ├── istio/                      # Istio configuration
+│   │   │   ├── gateway.yaml            # Wildcard gateway
+│   │   │   ├── ext-authz-filter.yaml   # EnvoyFilter for auth
+│   │   │   └── virtualservice-auth.yaml
+│   │   └── rbac/
+│   ├── apps/
+│   │   └── example-app/                # Reference implementation
+│   └── overlays/                       # Environment-specific configs
+├── scripts/
+│   ├── setup.sh                        # Deploy infrastructure
+│   ├── add-app.sh                      # Add auth to new app
+│   └── validate.sh                     # Test auth flow
+└── docs/
+    ├── ARCHITECTURE.md                 # Detailed design
+    ├── SETUP.md                        # Step-by-step guide
+    └── ADDING_APPS.md                  # App integration guide
+```
+
+## 🛠️ Scripts
+
+### setup.sh
+Deploys oauth2-proxy, Istio configuration, and validates setup.
+
+```bash
+./scripts/setup.sh
+```
+
+### add-app.sh
+Generates manifests for adding auth to an existing app.
+
+```bash
+./scripts/add-app.sh <app-name> <namespace> <port>
+# Example: ./scripts/add-app.sh chat chat-ns 3000
+```
+
+### validate.sh
+Tests the authentication flow end-to-end.
+
+```bash
+./scripts/validate.sh myapp.cat-herding.net
+```
+
+## 🔍 Troubleshooting
+
+### Check oauth2-proxy logs
+```bash
+kubectl logs -n auth -l app=oauth2-proxy -f
+```
+
+### Verify ext_authz filter is active
+```bash
+kubectl get envoyfilter -n istio-system ext-authz -o yaml
+```
+
+### Test auth check endpoint directly
+```bash
+kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
+  curl -v http://oauth2-proxy.auth.svc.cluster.local:4181/oauth2/auth
+```
+
+### Check if app has auth enabled
+```bash
+kubectl get deployment -n <namespace> <app> -o jsonpath='{.metadata.labels}'
+```
+
+## 📚 Documentation
+
+- [Architecture Details](docs/ARCHITECTURE.md)
+- [Setup Guide](docs/SETUP.md)
+- [Adding Apps](docs/ADDING_APPS.md)
+
+## 🔒 Security Considerations
+
+- Session cookies are encrypted and HTTP-only
+- Cookie domain is `.cat-herding.net` for SSO
+- TLS required for all endpoints (enforced by Istio)
+- OAuth state parameter prevents CSRF
+- Istio mTLS encrypts service-to-service traffic
+
+## 📊 Monitoring & Logging
+
+oauth2-proxy logs include:
+- User email/identity
+- Requested URL
+- Authentication provider
+- Timestamp and source IP
+
+Forward logs to Azure Monitor or your logging solution:
+
+```bash
+kubectl logs -n auth -l app=oauth2-proxy --tail=100 | \
+  jq 'select(.msg == "AuthSuccess" or .msg == "AuthFailure")'
+```
+
+## 🎓 Learn More
+
+- [OAuth2 Proxy Documentation](https://oauth2-proxy.github.io/oauth2-proxy/)
+- [Istio External Authorization](https://istio.io/latest/docs/tasks/security/authorization/authz-custom/)
+- [Envoy ext_authz Filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_authz_filter)
+
+## 📝 License
+
+MIT
+
+## 🤝 Contributing
+
+Contributions welcome! Please test changes in dev overlay before submitting PRs.

@@ -1,0 +1,33 @@
+# Secrets
+k8s/base/oauth2-proxy/secret.yaml
+k8s/overlays/*/secret.yaml
+*.secret.yaml
+
+# Sensitive configs
+*.key
+*.pem
+*.crt
+*.env
+.env*
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.bak
+*.log
