@@ -20,5 +20,6 @@ labels:
   - pairs:
       app.kubernetes.io/managed-by: kustomize
       app.kubernetes.io/part-of: auth-gateway
-    includeSelectors: true
+    # Do not mutate selectors; Deployment selectors are immutable after creation
+    # includeSelectors: true  # removed to avoid immutable field change
     includeTemplates: true
