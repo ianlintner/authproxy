@@ -1,0 +1,138 @@
+{{ define "sign_in" }}
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in | Cat Herding Access</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      const storedTheme = localStorage.getItem("ch-auth-theme");
+      const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const theme = storedTheme || (systemDark ? "dark" : "light");
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.classList.toggle("dark", theme === "dark");
+    </script>
+    <style>
+      :root[data-theme="light"] {
+        color-scheme: light;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+      }
+      .gradient-border {
+        position: relative;
+      }
+      .gradient-border::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 1.5rem;
+        padding: 1px;
+        background: linear-gradient(120deg, #9333ea, #ec4899, #14b8a6);
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+                mask-composite: exclude;
+      }
+    </style>
+  </head>
+  <body class="h-full bg-slate-50 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
+    <div class="flex min-h-screen flex-col justify-between px-6 py-10">
+      <header class="mx-auto w-full max-w-5xl">
+        <div class="flex items-center justify-between gap-4">
+          <a class="flex items-center gap-3 text-lg font-semibold" href="https://cat-herding.net" rel="noreferrer">
+            <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg ring-2 ring-white/20 dark:bg-white dark:text-slate-900">
+              🐾
+            </span>
+            <div>
+              <div class="text-base uppercase tracking-wide text-slate-500 dark:text-slate-400">Cat Herding</div>
+              <div class="text-lg font-semibold">Control Gateway</div>
+            </div>
+          </a>
+          <button id="theme-toggle" type="button" class="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600">
+            <span>Toggle theme</span>
+            <span id="theme-indicator">🌙</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="mx-auto grid w-full max-w-5xl gap-10 lg:grid-cols-[1fr,0.8fr]">
+        <section class="gradient-border rounded-3xl bg-white/80 p-10 backdrop-blur dark:bg-slate-900/70">
+          <div class="relative">
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Gateway Access</p>
+            <h1 class="mt-3 text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">
+              Sign in to continue
+            </h1>
+            <p class="mt-4 max-w-xl text-lg text-slate-600 dark:text-slate-300">
+              Unified single sign-on protects every internal domain under <span class="font-semibold text-slate-900 dark:text-white">cat-herding.net</span>.
+              Use your verified identity to hop between services without re-authenticating.
+            </p>
+
+            <div class="mt-10 space-y-4">
+              <a
+                class="flex items-center justify-center gap-3 rounded-2xl bg-slate-900 px-5 py-4 text-base font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:shadow-slate-100/50"
+                href="{{ .SignInURL }}"
+              >
+                <svg viewBox="0 0 16 16" class="h-5 w-5" aria-hidden="true" fill="currentColor">
+                  <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.19 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" clip-rule="evenodd"></path>
+                </svg>
+                <span>{{ if .CustomLoginText }}{{ .CustomLoginText }}{{ else }}Continue with {{ .ProviderName | title }}{{ end }}</span>
+              </a>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                Only approved organizations can access protected services. Need access? <a class="font-medium text-violet-500 hover:text-violet-400" href="mailto:security@cat-herding.net">Contact the platform team</a>.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-200/70 bg-white/70 p-8 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/50">
+          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500">What you get</p>
+          <div class="mt-6 space-y-6">
+            <article class="rounded-2xl border border-slate-100/80 p-5 shadow-sm dark:border-white/10">
+              <h2 class="text-base font-semibold">Zero-friction SSO</h2>
+              <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Authenticate once with {{ .ProviderName | title }} and glide through every internal environment with shared context.</p>
+            </article>
+            <article class="rounded-2xl border border-slate-100/80 p-5 shadow-sm dark:border-white/10">
+              <h2 class="text-base font-semibold">Granular auditing</h2>
+              <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Every hop is logged with device, IP, and session metadata to keep the SOC happy.</p>
+            </article>
+            <article class="rounded-2xl border border-slate-100/80 p-5 shadow-sm dark:border-white/10">
+              <h2 class="text-base font-semibold">Handoff-ready headers</h2>
+              <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Apps receive <code class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">X-Auth-*</code> headers with verified identity so you can focus on features, not auth plumbing.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="mx-auto w-full max-w-5xl pt-10 text-xs text-slate-500 dark:text-slate-400">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200/70 pt-6 dark:border-slate-800">
+          <span>© {{ .CurrentYear }} Cat Herding Network</span>
+          <div class="flex gap-6">
+            <a class="hover:text-slate-900 dark:hover:text-white" href="https://status.cat-herding.net" rel="noreferrer">Status</a>
+            <a class="hover:text-slate-900 dark:hover:text-white" href="https://docs.cat-herding.net" rel="noreferrer">Docs</a>
+            <a class="hover:text-slate-900 dark:hover:text-white" href="mailto:security@cat-herding.net">Security</a>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      const toggle = document.getElementById("theme-toggle");
+      const indicator = document.getElementById("theme-indicator");
+      const updateIndicator = () => {
+        const isDark = document.documentElement.classList.contains("dark");
+        indicator.textContent = isDark ? "🌞" : "🌙";
+        toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+      };
+      toggle.addEventListener("click", () => {
+        document.documentElement.classList.toggle("dark");
+        const theme = document.documentElement.classList.contains("dark") ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+        localStorage.setItem("ch-auth-theme", theme);
+        updateIndicator();
+      });
+      updateIndicator();
+    </script>
+  </body>
+</html>
+{{ end }}

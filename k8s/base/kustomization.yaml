@@ -9,12 +9,16 @@ resources:
   - oauth2-proxy/deployment.yaml
   - oauth2-proxy/service.yaml
   - oauth2-proxy/configmap.yaml
+  - oauth2-proxy/templates-configmap.yaml
   # Note: Create secret.yaml from secret.yaml.example before deploying
   # - oauth2-proxy/secret.yaml
   - istio/gateway.yaml
   - istio/virtualservice-auth.yaml
   - istio/ext-authz-filter.yaml
 
-commonLabels:
-  app.kubernetes.io/managed-by: kustomize
-  app.kubernetes.io/part-of: auth-gateway
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: auth-gateway
+    includeSelectors: true
+    includeTemplates: true

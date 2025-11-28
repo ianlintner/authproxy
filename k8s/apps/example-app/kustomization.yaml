@@ -10,7 +10,10 @@ resources:
   - virtualservice.yaml
   - authorization-policy.yaml
 
-commonLabels:
-  app.kubernetes.io/name: example-app
-  app.kubernetes.io/managed-by: kustomize
-  app.kubernetes.io/part-of: cat-herding-apps
+labels:
+  - pairs:
+      app.kubernetes.io/name: example-app
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: cat-herding-apps
+    includeSelectors: true
+    includeTemplates: true

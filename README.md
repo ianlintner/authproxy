@@ -110,6 +110,81 @@ Edit `k8s/base/oauth2-proxy/secret.yaml` with your provider credentials:
 
 **Callback URL**: `https://auth.cat-herding.net/oauth2/callback`
 
+### Custom Login Experience (Tailwind UI)
+
+This deployment now includes a custom Tailwind CSS powered sign-in page with:
+
+- Modern light/dark theme toggle (persisted to `localStorage`)
+- Provider selection cards (GitHub active; Google, Microsoft, LinkedIn placeholders)
+- Accessible button focus states and subtle motion
+- Friendly error page with retry action
+
+You can customize templates in `k8s/base/oauth2-proxy/templates-configmap.yaml`:
+
+```yaml
+data:
+  sign_in.html: |  # Main login page
+  error.html:   |  # Error page when authentication fails
+```
+
+If you add more providers (by deploying additional `oauth2-proxy` instances or migrating to an identity aggregator), convert the placeholder buttons into active links pointing at the appropriate start endpoints (usually `/oauth2/start` on the provider-specific auth host).
+
+To disable the custom UI (fallback to default): remove these args from the Deployment:
+
+```yaml
+  - --custom-templates-dir=/templates
+  - --skip-provider-button=false
+```
+
+And delete the templates ConfigMap reference in the volumes & mounts.
+
+### Enabling Additional Providers
+
+`oauth2-proxy` supports one provider per instance. Recommended strategies for multi-provider selection:
+
+1. Run multiple `oauth2-proxy` Deployments (e.g. `oauth2-proxy-github`, `oauth2-proxy-google`) each on its own subdomain and update the login page buttons to link directly to those domains.
+2. Use an IdP aggregator (e.g. Auth0, Azure AD B2C) and configure `oauth2-proxy` with `--provider=oidc` to get multiple social logins via a single OIDC issuer.
+3. Introduce an internal "auth selector" microservice that issues redirects to provider-specific ingress hosts.
+
+For option (2), update Deployment args:
+
+```yaml
+  - --provider=oidc
+  - --oidc-issuer-url=https://YOUR_TENANT.b2clogin.com/... (or Auth0/Azure AD issuer)
+```
+
+Then adapt `sign_in.html` to remove individual provider cards (the upstream IdP supplies them).
+
+### Template Iteration Workflow
+
+```bash
+# Edit template ConfigMap
+vim k8s/base/oauth2-proxy/templates-configmap.yaml
+
+# Rebuild manifests locally
+kubectl kustomize k8s/base | grep -n 'sign_in.html' | head
+
+# Apply changes
+kubectl apply -k k8s/base
+
+# Verify pod picked up new template (may require restart if not rolling update)
+kubectl rollout restart deployment/oauth2-proxy -n default
+```
+
+### Dark Mode Default
+
+Set default theme to dark by adding to `<body>` tag class list in `sign_in.html` or pre-seeding `localStorage.setItem('theme','dark')`.
+
+### Security Notes for Custom Templates
+
+| Concern | Mitigation |
+|---------|------------|
+| XSS via template variables | oauth2-proxy only injects controlled context; avoid adding `{{.}}` expansions for untrusted inputs |
+| Assets integrity | Tailwind CDN; if stricter CSP required, self-host a compiled CSS bundle |
+| Spoofed provider buttons | Clearly mark unavailable providers as disabled until implemented |
+
+Make sure you re-run `./scripts/validate.sh auth.cat-herding.net full` after UI changes to confirm no auth regression.
+
 ## 📁 Project Structure
 
 ```

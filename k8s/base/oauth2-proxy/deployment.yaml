@@ -92,7 +92,9 @@ spec:
         # Proxy configuration
         - --http-address=0.0.0.0:4180
         - --metrics-address=0.0.0.0:44180
-        - --skip-provider-button=true  # Skip provider selection, go straight to GitHub
+        # Enable custom templates directory & provider selection page
+        - --custom-templates-dir=/templates
+        - --skip-provider-button=false  # Show the custom Tailwind sign-in page
         
         # Redirect URL
         - --redirect-url=https://auth.cat-herding.net/oauth2/callback
@@ -163,6 +165,9 @@ spec:
         - name: secrets-store
           mountPath: /mnt/secrets-store
           readOnly: true
+        - name: templates
+          mountPath: /templates
+          readOnly: true
       volumes:
       - name: tmp
         emptyDir: {}
@@ -172,6 +177,9 @@ spec:
           readOnly: true
           volumeAttributes:
             secretProviderClass: spc-oauth2-proxy
+      - name: templates
+        configMap:
+          name: oauth2-proxy-templates
       # To source secrets from Azure Key Vault via CSI driver, add a volume like below
       # and create a SecretProviderClass named spc-oauth2-proxy. Then optionally
       # patch this Deployment to mount it at /mnt/secrets-store.
