@@ -13,16 +13,17 @@ data:
   # Reference: https://oauth2-proxy.github.io/oauth2-proxy/docs/configuration/overview#custom-templates
   sign_in.html: |
     <!DOCTYPE html>
-    <html lang="en" class="h-full">
+    <html lang="en" class="h-full dark">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
       <title>Sign in • Cat Herding SSO</title>
       <script src="https://cdn.tailwindcss.com"></script>
       <script>
-        // Dark mode preference
+        // Default to dark mode unless user explicitly chose light
         const userPref = localStorage.getItem('theme');
-        if (userPref === 'dark') document.documentElement.classList.add('dark');
+        if (!userPref) { localStorage.setItem('theme','dark'); }
+        if (userPref !== 'light') document.documentElement.classList.add('dark');
       </script>
       <style>
         .provider-btn { transition: all .15s ease; }
@@ -106,7 +107,7 @@ data:
     </html>
   error.html: |
     <!DOCTYPE html>
-    <html lang="en" class="h-full">
+    <html lang="en" class="h-full dark">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
