@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: oauth2-proxy
-  namespace: auth
+  namespace: default
   labels:
     app: oauth2-proxy
     app.kubernetes.io/name: oauth2-proxy
@@ -93,9 +93,6 @@ spec:
         - --reverse-proxy=true
         - --upstream=static://202  # Return 202 for auth checks
         
-        # Whitelist OAuth callback paths (no auth required)
-        - --skip-auth-route=^/oauth2/
-        
         # Redirect URL
         - --redirect-url=https://auth.cat-herding.net/oauth2/callback
         
@@ -111,7 +108,6 @@ spec:
         - --standard-logging=true
         - --auth-logging=true
         - --request-logging=true
-        - --request-logging-format=[{{.Timestamp}}] {{.Client}} {{.Host}} {{.RequestMethod}} {{.Upstream}} {{.RequestURI}} {{.Protocol}} {{.UserAgent}} {{.StatusCode}} {{.ResponseSize}} {{.RequestTime}}
         
         # Security
         - --ssl-insecure-skip-verify=false
@@ -162,6 +158,15 @@ spec:
       volumes:
       - name: tmp
         emptyDir: {}
+      # To source secrets from Azure Key Vault via CSI driver, add a volume like below
+      # and create a SecretProviderClass named spc-oauth2-proxy. Then optionally
+      # patch this Deployment to mount it at /mnt/secrets-store.
+      # - name: secrets-store
+      #   csi:
+      #     driver: secrets-store.csi.k8s.io
+      #     readOnly: true
+      #     volumeAttributes:
+      #       secretProviderClass: spc-oauth2-proxy
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:

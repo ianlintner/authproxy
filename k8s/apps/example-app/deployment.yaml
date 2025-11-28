@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: example-app
-  namespace: example-app
+  namespace: default
   labels:
     app: example-app
     # THIS LABEL ENABLES AUTHENTICATION via oauth2-proxy

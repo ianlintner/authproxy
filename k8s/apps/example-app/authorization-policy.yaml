@@ -6,7 +6,7 @@ apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: example-app-require-auth
-  namespace: example-app
+  namespace: default
   labels:
     app: example-app
     auth.cat-herding.net/enabled: "true"

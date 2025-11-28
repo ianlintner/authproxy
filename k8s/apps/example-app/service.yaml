@@ -3,7 +3,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: example-app
-  namespace: example-app
+  namespace: default
   labels:
     app: example-app
     app.kubernetes.io/name: example-app

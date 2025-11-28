@@ -51,7 +51,7 @@ Your app at `myapp.cat-herding.net` is now protected with social login!
                                         │
                          ┌──────────────▼────────────────┐
                          │  oauth2-proxy                 │
-                         │  (auth namespace)             │
+                         │  (default namespace)          │
                          │  - Port 4180: OAuth callback  │
                          │  - Port 4181: Auth check API  │
                          │  - Cookie: .cat-herding.net   │
@@ -127,9 +127,8 @@ authproxy/
 │   │   │   ├── ext-authz-filter.yaml   # EnvoyFilter for auth
 │   │   │   └── virtualservice-auth.yaml
 │   │   └── rbac/
-│   ├── apps/
-│   │   └── example-app/                # Reference implementation
-│   └── overlays/                       # Environment-specific configs
+│   └── apps/
+│       └── example-app/                # Reference implementation
 ├── scripts/
 │   ├── setup.sh                        # Deploy infrastructure
 │   ├── add-app.sh                      # Add auth to new app
@@ -168,7 +167,7 @@ Tests the authentication flow end-to-end.
 
 ### Check oauth2-proxy logs
 ```bash
-kubectl logs -n auth -l app=oauth2-proxy -f
+kubectl logs -n default -l app=oauth2-proxy -f
 ```
 
 ### Verify ext_authz filter is active
@@ -179,7 +178,7 @@ kubectl get envoyfilter -n istio-system ext-authz -o yaml
 ### Test auth check endpoint directly
 ```bash
 kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
-  curl -v http://oauth2-proxy.auth.svc.cluster.local:4181/oauth2/auth
+  curl -v http://oauth2-proxy.default.svc.cluster.local:4180/oauth2/auth
 ```
 
 ### Check if app has auth enabled
@@ -212,7 +211,7 @@ oauth2-proxy logs include:
 Forward logs to Azure Monitor or your logging solution:
 
 ```bash
-kubectl logs -n auth -l app=oauth2-proxy --tail=100 | \
+kubectl logs -n default -l app=oauth2-proxy --tail=100 | \
   jq 'select(.msg == "AuthSuccess" or .msg == "AuthFailure")'
 ```
 

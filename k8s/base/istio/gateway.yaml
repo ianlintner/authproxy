@@ -3,13 +3,13 @@ apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
   name: cat-herding-gateway
-  namespace: istio-system
+  namespace: aks-istio-ingress
   labels:
     app.kubernetes.io/name: cat-herding-gateway
     app.kubernetes.io/component: ingress
 spec:
   selector:
-    istio: ingressgateway
+    istio: aks-istio-ingressgateway-external
   servers:
   # HTTP - redirect to HTTPS
   - port:

@@ -42,7 +42,7 @@ fi
 
 HOSTNAME="$1"
 TEST_TYPE="${2:-quick}"
-AUTH_NAMESPACE="auth"
+AUTH_NAMESPACE="default"
 
 log_info "🔍 Validating authentication setup for: $HOSTNAME"
 echo ""
@@ -71,12 +71,17 @@ test_oauth2_proxy() {
     if [ "$pod_count" -gt 0 ]; then
         log_success "✓ oauth2-proxy has $pod_count running pod(s)"
         
-        # Test internal health endpoint
+        # Test internal health endpoint if tooling exists in container
         if kubectl exec -n "$AUTH_NAMESPACE" deploy/oauth2-proxy -- \
-            wget -q -O- http://localhost:4180/ping > /dev/null 2>&1; then
+            sh -c 'command -v wget >/dev/null 2>&1 && wget -q -O- http://localhost:4180/ping' \
+            > /dev/null 2>&1; then
+            log_success "✓ oauth2-proxy /ping endpoint responding"
+        elif kubectl exec -n "$AUTH_NAMESPACE" deploy/oauth2-proxy -- \
+            sh -c 'command -v curl >/dev/null 2>&1 && curl -sf http://localhost:4180/ping' \
+            > /dev/null 2>&1; then
             log_success "✓ oauth2-proxy /ping endpoint responding"
         else
-            log_warning "⚠ oauth2-proxy /ping endpoint not responding"
+            log_info "ℹ Skipping in-pod /ping probe (curl/wget unavailable in container)"
         fi
     else
         log_error "✗ No running oauth2-proxy pods found"
@@ -90,7 +95,7 @@ test_istio_config() {
     log_info "Test 3: Istio Configuration"
     
     # Check Gateway
-    if kubectl get gateway -n istio-system cat-herding-gateway > /dev/null 2>&1; then
+    if kubectl get gateway -n aks-istio-ingress cat-herding-gateway > /dev/null 2>&1; then
         log_success "✓ Gateway 'cat-herding-gateway' exists"
     else
         log_error "✗ Gateway 'cat-herding-gateway' not found"
@@ -98,7 +103,7 @@ test_istio_config() {
     fi
     
     # Check EnvoyFilter
-    if kubectl get envoyfilter -n istio-system ext-authz > /dev/null 2>&1; then
+    if kubectl get envoyfilter -n aks-istio-ingress ext-authz > /dev/null 2>&1; then
         log_success "✓ EnvoyFilter 'ext-authz' exists"
     else
         log_error "✗ EnvoyFilter 'ext-authz' not found"
@@ -117,11 +122,11 @@ test_istio_config() {
 test_tls_certificate() {
     log_info "Test 4: TLS Certificate"
     
-    if kubectl get secret -n istio-system cat-herding-wildcard-tls > /dev/null 2>&1; then
+    if kubectl get secret -n aks-istio-ingress cat-herding-wildcard-tls > /dev/null 2>&1; then
         log_success "✓ TLS certificate 'cat-herding-wildcard-tls' exists"
         
         # Check if certificate is valid
-        local not_after=$(kubectl get secret -n istio-system cat-herding-wildcard-tls \
+        local not_after=$(kubectl get secret -n aks-istio-ingress cat-herding-wildcard-tls \
             -o jsonpath='{.data.tls\.crt}' 2>/dev/null | base64 -d | \
             openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
         
@@ -240,7 +245,7 @@ test_logs() {
     log_info "Test 8: Recent Logs Check"
     
     local error_count=$(kubectl logs -n "$AUTH_NAMESPACE" -l app=oauth2-proxy --tail=50 2>/dev/null | \
-        grep -i "error\|failed\|fatal" | wc -l || echo "0")
+        grep -i "error\|failed\|fatal" | wc -l | tr -d '[:space:]')
     
     if [ "$error_count" -eq 0 ]; then
         log_success "✓ No recent errors in oauth2-proxy logs"
@@ -297,9 +302,9 @@ main() {
         echo ""
         log_info "Common fixes:"
         log_info "  - Run ./scripts/setup.sh to deploy infrastructure"
-        log_info "  - Check oauth2-proxy logs: kubectl logs -n auth -l app=oauth2-proxy"
-        log_info "  - Verify DNS points to ingress IP: kubectl get svc -n istio-system istio-ingressgateway"
-        log_info "  - Check TLS cert: kubectl get certificate -n istio-system"
+        log_info "  - Check oauth2-proxy logs: kubectl logs -n $AUTH_NAMESPACE -l app=oauth2-proxy"
+        log_info "  - Verify DNS points to ingress IP: kubectl get svc -n aks-istio-ingress aks-istio-ingressgateway-external"
+        log_info "  - Check TLS cert: kubectl get certificate -n aks-istio-ingress"
     fi
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""

@@ -12,8 +12,8 @@ NC='\033[0m' # No Color
 # Configuration
 CLUSTER_NAME="bigboy"
 RESOURCE_GROUP="nekoc"
-AUTH_NAMESPACE="auth"
-ISTIO_NAMESPACE="istio-system"
+AUTH_NAMESPACE="default"
+ISTIO_NAMESPACE="aks-istio-ingress"
 
 # Functions
 log_info() {
@@ -58,9 +58,10 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check if istio-ingressgateway exists
-    if ! kubectl get deployment -n "$ISTIO_NAMESPACE" istio-ingressgateway &> /dev/null; then
-        log_error "istio-ingressgateway not found. Please install Istio ingress gateway."
+    # Check if AKS Istio external ingress gateway service exists
+    if ! kubectl get svc -n "$ISTIO_NAMESPACE" aks-istio-ingressgateway-external &> /dev/null; then
+        log_error "AKS Istio external ingress gateway service not found."
+        log_error "Expected service: aks-istio-ingressgateway-external in namespace $ISTIO_NAMESPACE"
         exit 1
     fi
     
@@ -75,41 +76,65 @@ check_prerequisites() {
 check_secret() {
     log_info "Checking for OAuth2 secret configuration..."
     
-    if [ ! -f "k8s/base/oauth2-proxy/secret.yaml" ]; then
-        log_error "OAuth2 secret not found!"
-        log_error "Please create k8s/base/oauth2-proxy/secret.yaml from secret.yaml.example"
+    local has_file_secret=0
+    local has_spc=0
+    local has_existing_secret=0
+
+    if [ -f "k8s/base/oauth2-proxy/secret.yaml" ]; then
+        has_file_secret=1
+    fi
+
+    if kubectl get secretproviderclass -n "$AUTH_NAMESPACE" spc-oauth2-proxy &> /dev/null; then
+        has_spc=1
+    elif [ -f "k8s/base/azure/secretproviderclass-oauth2-proxy.yaml" ]; then
+        # Apply SPC manifest if present locally
+        log_info "Applying SecretProviderClass for Azure Key Vault (spc-oauth2-proxy)..."
+        kubectl apply -f k8s/base/azure/secretproviderclass-oauth2-proxy.yaml
+        has_spc=1
+    fi
+
+    if kubectl get secret -n "$AUTH_NAMESPACE" oauth2-proxy-secret &> /dev/null; then
+        has_existing_secret=1
+    fi
+
+    if [ $has_file_secret -eq 1 ] || [ $has_spc -eq 1 ] || [ $has_existing_secret -eq 1 ]; then
+        log_success "OAuth2 secret configuration detected (file or Azure Key Vault or existing secret)."
+    else
+        log_error "OAuth2 secret not configured!"
+        log_error "Provide one of the following before continuing:"
+        log_error "  A) Create k8s/base/oauth2-proxy/secret.yaml from secret.yaml.example and fill values"
+        log_error "  B) Configure Azure Key Vault via k8s/base/azure/secretproviderclass-oauth2-proxy.yaml (preferred)"
+        log_error "  C) Create an existing secret named 'oauth2-proxy-secret' in namespace '$AUTH_NAMESPACE'"
         log_error ""
-        log_error "Steps:"
-        log_error "  1. cp k8s/base/oauth2-proxy/secret.yaml.example k8s/base/oauth2-proxy/secret.yaml"
-        log_error "  2. Edit secret.yaml with your OAuth provider credentials"
-        log_error "  3. Generate cookie secret: openssl rand -base64 32"
-        log_error ""
-        log_error "For GitHub OAuth App:"
-        log_error "  - Create app: https://github.com/settings/developers"
-        log_error "  - Callback URL: https://auth.cat-herding.net/oauth2/callback"
+        log_error "GitHub OAuth App guidance: https://github.com/settings/developers"
+        log_error "Callback URL: https://auth.cat-herding.net/oauth2/callback"
         exit 1
     fi
-    
-    log_success "OAuth2 secret configuration found!"
 }
 
 deploy_base_infrastructure() {
     log_info "Deploying base authentication infrastructure..."
     
-    # Create auth namespace
-    log_info "Creating auth namespace..."
-    kubectl apply -f k8s/base/namespace.yaml
+    # Note: Using default namespace - no need to create it
+    log_info "Deploying to default namespace..."    
+    # kubectl apply -f k8s/base/namespace.yaml  # Not needed for default namespace
     
     # Deploy RBAC
     log_info "Deploying RBAC..."
     kubectl apply -f k8s/base/rbac/
     
-    # Deploy oauth2-proxy secret
-    log_info "Deploying oauth2-proxy secret..."
-    kubectl apply -f k8s/base/oauth2-proxy/secret.yaml
+    # Deploy oauth2-proxy secret (file-based) if present
+    if [ -f "k8s/base/oauth2-proxy/secret.yaml" ]; then
+        log_info "Deploying oauth2-proxy secret (file-based)..."
+        kubectl apply -f k8s/base/oauth2-proxy/secret.yaml
+    fi
     
     # Deploy oauth2-proxy
     log_info "Deploying oauth2-proxy..."
+    # Apply Azure Key Vault SecretProviderClass if present
+    if [ -f "k8s/base/azure/secretproviderclass-oauth2-proxy.yaml" ]; then
+        kubectl apply -f k8s/base/azure/secretproviderclass-oauth2-proxy.yaml || true
+    fi
     kubectl apply -f k8s/base/oauth2-proxy/configmap.yaml
     kubectl apply -f k8s/base/oauth2-proxy/deployment.yaml
     kubectl apply -f k8s/base/oauth2-proxy/service.yaml
@@ -184,7 +209,7 @@ get_ingress_ip() {
     local ip=""
     
     while [ $attempt -le $max_attempts ]; do
-        ip=$(kubectl get svc -n "$ISTIO_NAMESPACE" istio-ingressgateway \
+        ip=$(kubectl get svc -n "$ISTIO_NAMESPACE" aks-istio-ingressgateway-external \
             -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
         
         if [ -n "$ip" ]; then
@@ -199,7 +224,7 @@ get_ingress_ip() {
     done
     
     log_warning "Could not get LoadBalancer IP. Check manually:"
-    log_warning "  kubectl get svc -n $ISTIO_NAMESPACE istio-ingressgateway"
+    log_warning "  kubectl get svc -n $ISTIO_NAMESPACE aks-istio-ingressgateway-external"
 }
 
 validate_deployment() {

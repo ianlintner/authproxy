@@ -1,10 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: auth
+namespace: default
 
 resources:
-  - namespace.yaml
+  # namespace.yaml not needed - using default namespace
   - rbac/service-account.yaml
   - oauth2-proxy/deployment.yaml
   - oauth2-proxy/service.yaml

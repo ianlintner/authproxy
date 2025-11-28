@@ -6,15 +6,15 @@ apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
   name: ext-authz
-  namespace: istio-system
+  namespace: aks-istio-ingress
   labels:
     app.kubernetes.io/name: ext-authz-filter
     app.kubernetes.io/component: authentication
 spec:
-  # Apply to ingress gateway workload
+  # Apply to ingress gateway workload (AKS Istio add-on external gateway)
   workloadSelector:
     labels:
-      istio: ingressgateway
+      istio: aks-istio-ingressgateway-external
   
   configPatches:
   # Add the ext_authz HTTP filter before the router filter
@@ -32,17 +32,18 @@ spec:
       value:
         name: envoy.filters.http.ext_authz
         typed_config:
-          "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.HttpService
+          "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+          
           http_service:
             server_uri:
-              uri: http://oauth2-proxy.auth.svc.cluster.local:4180
-              cluster: outbound|4180||oauth2-proxy.auth.svc.cluster.local
+              uri: http://oauth2-proxy.default.svc.cluster.local:4180
+              cluster: outbound|4180||oauth2-proxy.default.svc.cluster.local
               timeout: 5s
             
-            # Path prefix for auth check
+            # Path prefix for auth check - oauth2-proxy expects /oauth2/auth
             path_prefix: /oauth2/auth
             
-            # Authorization request headers to send to oauth2-proxy
+            # Headers to preserve in auth check
             authorization_request:
               allowed_headers:
                 patterns:
@@ -69,6 +70,9 @@ spec:
                 patterns:
                 - exact: "set-cookie"
                 - exact: "location"
+                - exact: "content-type"
+                - exact: "cache-control"
+                - exact: "expires"
           
           # Failure behavior
           failure_mode_allow: false
@@ -79,3 +83,18 @@ spec:
           
           # Clear route cache to handle redirects
           clear_route_cache: true
+  
+  # Disable ext_authz for auth.cat-herding.net (oauth2-proxy's own domain)
+  - applyTo: VIRTUAL_HOST
+    match:
+      context: GATEWAY
+      routeConfiguration:
+        vhost:
+          name: "auth.cat-herding.net:443"
+    patch:
+      operation: MERGE
+      value:
+        typed_per_filter_config:
+          envoy.filters.http.ext_authz:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+            disabled: true

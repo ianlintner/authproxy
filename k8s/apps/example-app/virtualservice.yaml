@@ -3,7 +3,7 @@ apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
   name: example-app
-  namespace: example-app
+  namespace: default
   labels:
     app: example-app
     auth.cat-herding.net/enabled: "true"
@@ -11,14 +11,14 @@ spec:
   hosts:
   - "example-app.cat-herding.net"
   gateways:
-  - istio-system/cat-herding-gateway
+  - aks-istio-ingress/cat-herding-gateway
   http:
   - match:
     - uri:
         prefix: "/"
     route:
     - destination:
-        host: example-app.example-app.svc.cluster.local
+        host: example-app.default.svc.cluster.local
         port:
           number: 80
     timeout: 30s

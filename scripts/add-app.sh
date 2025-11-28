@@ -38,7 +38,7 @@ NAMESPACE="$2"
 PORT="$3"
 HOSTNAME="${APP_NAME}.cat-herding.net"
 OUTPUT_DIR="k8s/apps/${APP_NAME}"
-ISTIO_NAMESPACE="istio-system"
+ISTIO_NAMESPACE="aks-istio-ingress"
 
 log_info "Generating authentication manifests for app: $APP_NAME"
 log_info "Namespace: $NAMESPACE"
@@ -268,7 +268,7 @@ kubectl get authorizationpolicy -n ${NAMESPACE} ${APP_NAME}-require-auth -o yaml
 
 ### View oauth2-proxy logs
 \`\`\`bash
-kubectl logs -n auth -l app=oauth2-proxy -f
+kubectl logs -n default -l app=oauth2-proxy -f
 \`\`\`
 
 ### Test without auth (for debugging)
