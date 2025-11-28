@@ -154,9 +154,18 @@ spec:
         volumeMounts:
         - name: tmp
           mountPath: /tmp
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
+          readOnly: true
       volumes:
       - name: tmp
         emptyDir: {}
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: spc-oauth2-proxy
       # To source secrets from Azure Key Vault via CSI driver, add a volume like below
       # and create a SecretProviderClass named spc-oauth2-proxy. Then optionally
       # patch this Deployment to mount it at /mnt/secrets-store.
