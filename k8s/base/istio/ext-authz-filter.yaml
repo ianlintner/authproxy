@@ -2,6 +2,9 @@
 # EnvoyFilter to enable external authorization (ext_authz) via oauth2-proxy
 # This filter intercepts requests at the Istio ingress gateway and checks
 # authentication with oauth2-proxy before forwarding to backend services
+#
+# NOTE: ext_authz is ENABLED by default. To EXCLUDE an app from auth,
+# add a per-vhost config section with "disabled: true" for that virtual host.
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
@@ -55,7 +58,18 @@ spec:
                 - exact: "x-forwarded-proto"
                 - exact: "x-forwarded-host"
                 - exact: "x-forwarded-uri"
+                - exact: "x-forwarded-for"
+                - exact: "x-original-url"
                 - prefix: "x-auth-request"
+              headers_to_add:
+              - key: "X-Forwarded-Proto"
+                value: "%REQ(:SCHEME)%"
+              - key: "X-Forwarded-Host"
+                value: "%REQ(:AUTHORITY)%"
+              - key: "X-Forwarded-Uri"
+                value: "%REQ(:PATH)%"
+              - key: "X-Original-URL"
+                value: "%REQ(:SCHEME)%://%REQ(:AUTHORITY)%%REQ(:PATH)%"
             
             # Authorization response headers to pass to upstream service
             authorization_response:
@@ -84,6 +98,10 @@ spec:
           # Clear route cache to handle redirects
           clear_route_cache: true
   
+  #############################################################################
+  # PUBLIC APPS - Disable auth for these virtual hosts
+  #############################################################################
+  
   # Disable ext_authz for auth.cat-herding.net (oauth2-proxy's own domain)
   - applyTo: VIRTUAL_HOST
     match:
@@ -98,3 +116,37 @@ spec:
           envoy.filters.http.ext_authz:
             "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
             disabled: true
+  
+  # Disable ext_authz for portfolio.hugecat.net (public site)
+  - applyTo: VIRTUAL_HOST
+    match:
+      context: GATEWAY
+      routeConfiguration:
+        vhost:
+          name: "portfolio.hugecat.net:443"
+    patch:
+      operation: MERGE
+      value:
+        typed_per_filter_config:
+          envoy.filters.http.ext_authz:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+            disabled: true
+  
+  #############################################################################
+  # To exclude more apps from auth, add entries like:
+  #
+  # - applyTo: VIRTUAL_HOST
+  #   match:
+  #     context: GATEWAY
+  #     routeConfiguration:
+  #       vhost:
+  #         name: "public-app.cat-herding.net:443"
+  #   patch:
+  #     operation: MERGE
+  #     value:
+  #       typed_per_filter_config:
+  #         envoy.filters.http.ext_authz:
+  #           "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+  #           disabled: true
+  #############################################################################
+  #############################################################################

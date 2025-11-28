@@ -87,11 +87,10 @@ spec:
         - --set-authorization-header=true
         - --set-xauthrequest=true
         
-        # Proxy configuration for ext_authz mode
+        # Proxy configuration
         - --http-address=0.0.0.0:4180
         - --metrics-address=0.0.0.0:44180
-        - --reverse-proxy=true
-        - --upstream=static://202  # Return 202 for auth checks
+        - --skip-provider-button=true  # Skip provider selection, go straight to GitHub
         
         # Redirect URL
         - --redirect-url=https://auth.cat-herding.net/oauth2/callback
