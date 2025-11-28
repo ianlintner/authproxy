@@ -23,6 +23,8 @@ spec:
     metadata:
       labels:
         app: oauth2-proxy
+        app.kubernetes.io/name: oauth2-proxy
+        app.kubernetes.io/component: authentication
         version: v7.6.0
       annotations:
         prometheus.io/scrape: "true"
@@ -94,6 +96,10 @@ spec:
         
         # Redirect URL
         - --redirect-url=https://auth.cat-herding.net/oauth2/callback
+        
+        # Upstream configuration - required even for ext_authz mode
+        # Use a simple static response since Istio handles actual routing
+        - --upstream=static://200
         
         # Whitelist domains
         - --whitelist-domain=.cat-herding.net
