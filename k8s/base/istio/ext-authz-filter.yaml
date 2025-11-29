@@ -70,6 +70,19 @@ spec:
                 value: "%REQ(:PATH)%"
               - key: "X-Original-URL"
                 value: "%REQ(:SCHEME)%://%REQ(:AUTHORITY)%%REQ(:PATH)%"
+
+  # To allow requests to https://dsa.cat-herding.net/, add a configPatch for HTTP_ROUTE or update the AuthorizationPolicy to include this host.
+  # Example (not actual YAML, for guidance):
+  # - applyTo: HTTP_ROUTE
+  #   match:
+  #     context: GATEWAY
+  #     routeConfiguration:
+  #       vhost:
+  #         name: "dsa.cat-herding.net"
+  #   patch:
+  #     operation: MERGE
+  #     value:
+  #       disabled: false
             
             # Authorization response headers to pass to upstream service
             authorization_response:
