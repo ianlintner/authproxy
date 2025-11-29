@@ -1,103 +1,242 @@
-# AKS SSO Social Login Proxy Gateway
+# AKS OAuth2 Sidecar Authentication
 
-Centralized authentication gateway for AKS cluster `bigboy` using Istio ext_authz and oauth2-proxy. Enables SSO across `*.cat-herding.net` subdomains with social login providers (GitHub, Google, LinkedIn, Microsoft).
+Simple OAuth2 authentication for AKS applications using a **sidecar pattern**. Each application gets its own `oauth2-proxy` container that handles authentication before requests reach your app.
 
 ## 🚀 Quick Start
 
 ```bash
 # 1. Configure your OAuth app credentials
-cp k8s/base/oauth2-proxy/secret.yaml.example k8s/base/oauth2-proxy/secret.yaml
+cp k8s/base/oauth2-proxy-sidecar/secret.yaml.example k8s/base/oauth2-proxy-sidecar/secret.yaml
 # Edit secret.yaml with your OAuth client ID and secret
 
-# 2. Deploy the auth infrastructure
+# 2. Deploy the base infrastructure
 ./scripts/setup.sh
 
-# 3. Add authentication to an existing app
-./scripts/add-app.sh myapp myapp-namespace 8080
+# 3. Deploy example app with authentication
+kubectl apply -k k8s/apps/example-app/
+
+# 4. Or add authentication to an existing app
+./scripts/add-sidecar.sh myapp default 8080 myapp.cat-herding.net
 ```
 
-Your app at `myapp.cat-herding.net` is now protected with social login!
+Your app at `https://myapp.cat-herding.net` is now protected with OAuth2!
 
 ## 📋 Prerequisites
 
-- AKS cluster `bigboy` in resource group `nekoc` with Istio installed
-- cert-manager deployed in cluster
+- AKS cluster with Istio installed
 - Wildcard DNS `*.cat-herding.net` pointing to Istio ingress gateway
-- Wildcard TLS certificate for `*.cat-herding.net` (managed by cert-manager)
-- OAuth application registered (GitHub, Google, Azure AD B2C, etc.)
+- Wildcard TLS certificate for `*.cat-herding.net`
+- OAuth application registered (GitHub, Google, Azure AD, etc.)
 - `kubectl` configured for cluster access
 
 ## 🏗️ Architecture
 
 ```
-                                    ┌─────────────────────┐
-                                    │   Social IdP        │
-                                    │  (GitHub/Google/    │
-                                    │   LinkedIn/MS)      │
-                                    └──────────┬──────────┘
-                                               │
-                                               │ OAuth flow
-                                               │
-┌──────────────┐         ┌──────────────────────▼─────────────┐
-│              │         │  Istio Ingress Gateway             │
-│   Browser    │────────▶│  (*.cat-herding.net)               │
-│              │  HTTPS  │                                    │
-└──────────────┘         │  ┌──────────────────────────────┐ │
-                         │  │ ext_authz filter             │ │
-                         │  │ (EnvoyFilter)                │ │
-                         │  └───────────┬──────────────────┘ │
-                         └──────────────┼────────────────────┘
-                                        │ Auth check
-                                        │
-                         ┌──────────────▼────────────────┐
-                         │  oauth2-proxy                 │
-                         │  (default namespace)          │
-                         │  - Port 4180: OAuth callback  │
-                         │  - Port 4181: Auth check API  │
-                         │  - Cookie: .cat-herding.net   │
-                         └──────────────┬────────────────┘
-                                        │ Authenticated
-                                        │
-                         ┌──────────────▼────────────────┐
-                         │  Backend Application          │
-                         │  (with auth label enabled)    │
-                         │  - Receives user headers      │
-                         └───────────────────────────────┘
+Browser → Istio Gateway → Service (4180) → Pod
+                                            ├─ oauth2-proxy (4180)
+                                            └─ your-app (8080)
 ```
 
-## 🎯 How It Works
+### How It Works
 
-1. **User requests protected app**: Browser → `https://myapp.cat-herding.net`
-2. **Istio ext_authz intercepts**: Envoy calls oauth2-proxy auth endpoint
-3. **Check session cookie**: oauth2-proxy validates `.cat-herding.net` cookie
-4. **If not authenticated**: Redirect to OAuth provider (GitHub, etc.)
-5. **After login**: Set session cookie, redirect back to app
-6. **If authenticated**: Inject user headers, forward to backend
-7. **SSO magic**: Cookie works across all `*.cat-herding.net` subdomains
+1. **Traffic hits Istio Gateway** at `https://myapp.cat-herding.net`
+2. **Routes to Service** on port 4180
+3. **oauth2-proxy sidecar** receives the request
+   - Checks for valid session cookie
+   - If not authenticated → redirects to OAuth provider
+   - If authenticated → proxies to app container on `localhost:8080`
+4. **App receives request** with user headers injected
+5. **SSO across all apps** via shared `.cat-herding.net` cookie domain
 
-## 🔧 Configuration
+### Benefits
 
-### Enable Auth for Your App
+- ✅ **Simple**: No complex Istio ext_authz configuration
+- ✅ **Isolated**: Each app has its own auth configuration
+- ✅ **Portable**: Easy to move apps between clusters
+- ✅ **Debuggable**: Auth logs co-located with app logs
+- ✅ **Flexible**: Different OAuth providers per app
 
-Add this label to your Deployment:
+## 🔧 Usage
+
+### Deploy New App with Authentication
+
+See the complete example in `k8s/apps/example-app/`:
 
 ```yaml
-metadata:
-  labels:
-    auth.cat-herding.net/enabled: "true"
+# Key parts of your deployment:
+containers:
+- name: oauth2-proxy
+  image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+  ports:
+  - containerPort: 4180
+  env:
+  - name: OAUTH2_PROXY_REDIRECT_URL
+    value: "https://myapp.cat-herding.net/oauth2/callback"
+  - name: OAUTH2_PROXY_UPSTREAMS
+    value: "http://127.0.0.1:8080"
+  # ... OAuth credentials from secret
+
+- name: app
+  # Your application container
+  ports:
+  - containerPort: 8080
 ```
 
-Then create an AuthorizationPolicy and VirtualService (see `k8s/apps/example-app/`).
+### Add Authentication to Existing App
+
+Use the helper script:
+
+```bash
+./scripts/add-sidecar.sh myapp default 8080 myapp.cat-herding.net
+```
+
+This will:
+1. Add oauth2-proxy sidecar to your deployment
+2. Update service to expose port 4180
+3. Create/update VirtualService
+4. Deploy changes
 
 ### Access User Identity in Your App
 
-oauth2-proxy injects headers with user information:
+The oauth2-proxy sidecar injects headers with user information:
 
 ```go
 email := r.Header.Get("X-Auth-Request-Email")
-user := r.Header.Get("X-Auth-Request-User") 
-preferredUsername := r.Header.Get("X-Auth-Request-Preferred-Username")
+user := r.Header.Get("X-Auth-Request-User")
 ```
+
+```python
+email = request.headers.get('X-Auth-Request-Email')
+user = request.headers.get('X-Auth-Request-User')
+```
+
+## 🔒 OAuth Provider Setup
+
+### GitHub OAuth App
+
+1. Go to https://github.com/settings/developers
+2. Create new OAuth App
+3. Set callback URL: `https://your-app.cat-herding.net/oauth2/callback`
+4. Copy Client ID and Secret to `k8s/base/oauth2-proxy-sidecar/secret.yaml`
+
+### Google OAuth
+
+1. Go to https://console.cloud.google.com/apis/credentials
+2. Create OAuth 2.0 Client ID
+3. Set callback URL: `https://your-app.cat-herding.net/oauth2/callback`
+4. Update `configmap-sidecar.yaml` to use `provider = "google"`
+
+### Other Providers
+
+oauth2-proxy supports many providers. Update the ConfigMap:
+- Azure AD: `provider = "azure"`
+- OIDC: `provider = "oidc"` + `oidc_issuer_url`
+- See: https://oauth2-proxy.github.io/oauth2-proxy/docs/configuration/oauth_provider
+
+## 📁 Project Structure
+
+```
+k8s/
+├── base/
+│   ├── istio/
+│   │   └── gateway.yaml              # Istio Gateway for *.cat-herding.net
+│   └── oauth2-proxy-sidecar/
+│       ├── configmap-sidecar.yaml    # OAuth2 proxy configuration
+│       ├── secret.yaml.example       # OAuth credentials template
+│       └── sidecar-template.yaml     # Container spec template
+└── apps/
+    └── example-app/          # Complete example
+        ├── deployment.yaml            # App + oauth2-proxy sidecar
+        ├── service.yaml               # Service on port 4180
+        └── virtualservice.yaml        # Routes traffic to sidecar
+
+scripts/
+├── setup.sh                          # Deploy base infrastructure
+├── add-sidecar.sh                    # Add auth to existing app
+└── validate.sh                       # Validate setup
+```
+
+## 🛠️ Scripts
+
+### setup.sh
+Deploys base infrastructure:
+- OAuth2 sidecar ConfigMap
+- Istio Gateway
+- Validates prerequisites
+
+```bash
+./scripts/setup.sh
+```
+
+### add-sidecar.sh  
+Adds oauth2-proxy sidecar to existing deployment:
+
+```bash
+./scripts/add-sidecar.sh <app-name> <namespace> <app-port> <domain>
+
+# Example:
+./scripts/add-sidecar.sh myapp default 8080 myapp.cat-herding.net
+```
+
+### validate.sh
+Checks infrastructure is properly configured:
+
+```bash
+./scripts/validate.sh
+```
+
+## 🔍 Troubleshooting
+
+### Check oauth2-proxy sidecar logs
+
+```bash
+kubectl logs -n <namespace> <pod-name> -c oauth2-proxy
+```
+
+### Check app can't be reached
+
+1. Verify VirtualService routes to port 4180:
+   ```bash
+   kubectl get virtualservice <app-name> -o yaml
+   ```
+
+2. Verify Service exposes port 4180:
+   ```bash
+   kubectl get svc <app-name>
+   ```
+
+3. Check oauth2-proxy sidecar is running:
+   ```bash
+   kubectl get pod <pod-name> -o jsonpath='{.spec.containers[*].name}'
+   ```
+
+### Authentication loop / redirect issues
+
+Check OAUTH2_PROXY_REDIRECT_URL matches your domain:
+```bash
+kubectl get deployment <app-name> -o yaml | grep REDIRECT_URL
+```
+
+### Cookie not persisting
+
+Verify cookie domain is `.cat-herding.net` in ConfigMap
+
+## 📚 Documentation
+
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Detailed architecture and design
+- [ADDING_APPS.md](docs/ADDING_APPS.md) - Step-by-step guide for adding auth
+- [SETUP.md](docs/SETUP.md) - Detailed setup instructions
+
+## 🔐 Security Notes
+
+- Cookie secret must be 32 bytes, randomly generated
+- Use HTTPS only (enforced by cookie_secure = true)
+- Session cookies expire after 7 days by default
+- All secrets should be stored in Kubernetes secrets (never commit to git!)
+
+## 📝 License
+
+MIT
 
 ### Configure OAuth Provider
 

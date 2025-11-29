@@ -6,14 +6,12 @@ metadata:
   namespace: default
   labels:
     app: example-app
-    app.kubernetes.io/name: example-app
 spec:
   type: ClusterIP
+  ports:
+  - name: proxy
+    port: 4180
+    targetPort: 4180
+    protocol: TCP
   selector:
     app: example-app
-  ports:
-  - name: http
-    port: 80
-    targetPort: http
-    protocol: TCP
-  sessionAffinity: None

@@ -1,0 +1,51 @@
+---
+# ConfigMap for oauth2-proxy sidecar configuration
+# This can be mounted into any application pod to provide OAuth2 authentication
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy-sidecar-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: oauth2-proxy-sidecar
+    app.kubernetes.io/component: authentication
+data:
+  oauth2_proxy.cfg: |
+    # Provider configuration (GitHub by default)
+    provider = "github"
+    # For other providers:
+    # provider = "google"
+    # provider = "oidc"
+    # oidc_issuer_url = "https://your-issuer"
+    
+    # Listen on all interfaces
+    http_address = "0.0.0.0:4180"
+    
+    # Upstream is the application container on localhost
+    # Port will be set via OAUTH2_PROXY_UPSTREAMS env var
+    # Default: upstreams = ["http://127.0.0.1:8080"]
+    
+    # Cookie configuration for SSO across *.cat-herding.net
+    cookie_name = "_oauth2_proxy"
+    cookie_domains = [".cat-herding.net"]
+    cookie_secure = true
+    cookie_httponly = true
+    cookie_samesite = "lax"
+    cookie_expire = "168h"
+    cookie_refresh = "1h"
+    
+    # Email configuration
+    email_domains = ["*"]
+    
+    # Pass user information to upstream
+    pass_access_token = true
+    pass_authorization_header = true
+    pass_user_headers = true
+    set_authorization_header = true
+    set_xauthrequest = true
+    
+    # Redirect URL (will be customized per-app via env var)
+    # redirect_url set via OAUTH2_PROXY_REDIRECT_URL env var
+    
+    # Skip provider selection page (direct to provider)
+    skip_provider_button = true

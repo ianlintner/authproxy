@@ -6,7 +6,6 @@ metadata:
   namespace: default
   labels:
     app: example-app
-    auth.cat-herding.net/enabled: "true"
 spec:
   hosts:
   - "example-app.cat-herding.net"
@@ -15,14 +14,9 @@ spec:
   http:
   - match:
     - uri:
-        prefix: "/"
+        prefix: /
     route:
     - destination:
         host: example-app.default.svc.cluster.local
         port:
-          number: 80
-    timeout: 30s
-    retries:
-      attempts: 3
-      perTryTimeout: 10s
-      retryOn: gateway-error,connect-failure,refused-stream
+          number: 4180
