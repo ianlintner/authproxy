@@ -1,0 +1,32 @@
+# Example values for cat-herding.net cluster
+
+# Domain configuration
+domain: cat-herding.net
+cookieDomain: .cat-herding.net
+
+# Use existing GitHub OAuth secret
+oauth:
+  provider: github
+  existingSecret: oauth2-proxy-secret
+
+# Istio integration for AKS Istio
+istio:
+  enabled: true
+  gateway:
+    create: false
+    existingGateway: "aks-istio-ingress/cat-herding-gateway"
+  ingressGateway:
+    selector:
+      istio: aks-istio-ingressgateway-external
+    namespace: aks-istio-ingress
+
+# Namespace for resources
+namespace: default
+
+# Force redirect URL to match GitHub OAuth app configuration
+# GitHub OAuth app must be configured with: https://auth.cat-herding.net/oauth2/callback
+# Enable rd (redirect) parameter to support return to requested URL after auth
+extraArgs:
+  - --redirect-url=https://auth.cat-herding.net/oauth2/callback
+  - --whitelist-domain=.cat-herding.net
+  - --cookie-domain=.cat-herding.net

@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-app
+  labels:
+    app: simple-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-app
+  template:
+    metadata:
+      labels:
+        app: simple-app
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/ianlintner/simple-app:latest
+          ports:
+            - containerPort: 8080
+        - name: oauth2-proxy
+          image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+          args:
+            - --config=/etc/oauth2-proxy/oauth2_proxy.cfg
+            - --http-address=0.0.0.0:4180
+          env:
+            - name: OAUTH2_PROXY_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: oauth2-proxy-secret
+                  key: client-id
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: oauth2-proxy-secret
+                  key: client-secret
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: oauth2-proxy-secret
+                  key: cookie-secret
+            - name: OAUTH2_PROXY_UPSTREAMS
+              value: "http://127.0.0.1:8080"
+            - name: OAUTH2_PROXY_REDIRECT_URL
+              value: "https://simple-app.example.com/oauth2/callback"
+          ports:
+            - containerPort: 4180
+          volumeMounts:
+            - name: oauth2-config
+              mountPath: /etc/oauth2-proxy
+              readOnly: true
+      volumes:
+        - name: oauth2-config
+          configMap:
+            name: oauth2-proxy-sidecar-config
