@@ -1,0 +1,125 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: example-app-web
+  namespace: default
+  labels:
+    app: example-app
+data:
+  nginx.conf: |
+    server {
+        listen 8080;
+        server_name _;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # Serve static content
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Expose auth headers as JSON for JavaScript to consume
+        location /headers {
+            default_type application/json;
+            return 200 '{"X-Auth-Request-User":"$http_x_auth_request_user","X-Auth-Request-Email":"$http_x_auth_request_email","X-Auth-Request-Preferred-Username":"$http_x_auth_request_preferred_username"}';
+        }
+
+        # Health check endpoint
+        location /healthz {
+            access_log off;
+            return 200 "OK\n";
+            add_header Content-Type text/plain;
+        }
+    }
+  
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Example App - Authenticated</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-gray-50 min-h-screen flex items-center justify-center p-6">
+        <div class="max-w-2xl w-full">
+            <div class="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-200">
+                <!-- Header -->
+                <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-6 text-white">
+                    <h1 class="text-2xl font-bold">🎉 Welcome to Example App</h1>
+                    <p class="text-indigo-100 mt-2">You are successfully authenticated via OAuth2 Sidecar Proxy</p>
+                </div>
+                
+                <!-- Content -->
+                <div class="px-8 py-6">
+                    <div class="space-y-4">
+                        <div class="bg-green-50 border-l-4 border-green-500 p-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-green-800">Authentication Successful</h3>
+                                    <p class="text-sm text-green-700 mt-1">Your session is active and protected by OAuth2 proxy.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- User Info -->
+                        <div class="border border-gray-200 rounded-lg p-6">
+                            <h2 class="text-lg font-semibold text-gray-900 mb-4">Session Information</h2>
+                            <dl class="space-y-3">
+                                <div class="flex justify-between">
+                                    <dt class="text-sm font-medium text-gray-500">User:</dt>
+                                    <dd class="text-sm text-gray-900 font-mono" id="user">Loading...</dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm font-medium text-gray-500">Email:</dt>
+                                    <dd class="text-sm text-gray-900 font-mono" id="email">Loading...</dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm font-medium text-gray-500">Provider:</dt>
+                                    <dd class="text-sm text-gray-900">GitHub OAuth</dd>
+                                </div>
+                            </dl>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="flex gap-4">
+                            <a href="/" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg text-center font-medium transition">
+                                🏠 Home
+                            </a>
+                            <a href="/oauth2/sign_out?rd=https://example-app.cat-herding.net/" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg text-center font-medium transition">
+                                🚪 Sign Out
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="bg-gray-50 px-8 py-4 border-t border-gray-200">
+                    <div class="text-xs text-gray-500 space-y-1">
+                        <p><strong>Protected URLs:</strong> All requests to this app are authenticated via OAuth2 proxy sidecar</p>
+                        <p><strong>Session Cookie:</strong> Shared across *.cat-herding.net domain</p>
+                        <p><strong>Logout:</strong> Clears session and redirects to sign-in page</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Fetch user info from headers
+            fetch('/headers')
+                .then(r => r.json())
+                .catch(() => ({}))
+                .then(headers => {
+                    document.getElementById('user').textContent = headers['X-Auth-Request-User'] || 'Not available';
+                    document.getElementById('email').textContent = headers['X-Auth-Request-Email'] || 'Not available';
+                });
+        </script>
+    </body>
+    </html>

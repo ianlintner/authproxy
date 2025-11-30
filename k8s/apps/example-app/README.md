@@ -19,9 +19,10 @@ The oauth2-proxy sidecar:
 
 ## Files
 
-- `deployment.yaml` - Pod with oauth2-proxy sidecar + app container
+- `deployment.yaml` - Pod with oauth2-proxy sidecar + nginx app container
 - `service.yaml` - Service exposing port 4180 (oauth2-proxy)
 - `virtualservice.yaml` - Routes traffic from example-app.cat-herding.net to service
+- `configmap-web.yaml` - Nginx configuration and HTML with logout button
 - `namespace.yaml` - Namespace with Istio injection enabled
 - `kustomization.yaml` - Kustomize configuration
 
@@ -41,6 +42,16 @@ kubectl apply -k .
 2. You'll be redirected to GitHub/Google/your OAuth provider
 3. After login, you'll be redirected back to the app
 4. Cookie is set for `.cat-herding.net` domain (SSO across all apps)
+5. Click **Sign Out** button to logout and clear the session
+
+## Logout Functionality
+
+The example app includes a logout button that:
+- Redirects to `/oauth2/sign_out?rd=<return_url>`
+- Clears the OAuth session cookie
+- Returns user to the sign-in page
+
+The logout endpoint is handled by oauth2-proxy and works automatically with any application using the sidecar pattern.
 
 ## Customize for Your App
 

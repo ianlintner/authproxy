@@ -36,8 +36,11 @@ data:
     set_authorization_header = true
     set_xauthrequest = true
     
-    # Skip provider selection page
-    skip_provider_button = true
+    # Show custom sign-in page with provider button
+    skip_provider_button = false
+    
+    # Custom templates
+    custom_templates_dir = "/templates"
     
     # Reverse proxy configuration
     reverse_proxy = true
