@@ -1,481 +1,560 @@
 # OAuth2 Sidecar Proxy
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.20+-blue.svg)](https://kubernetes.io/)
-[![Istio](https://img.shields.io/badge/Istio-1.14+-blue.svg)](https://istio.io/)
-[![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://ianlintner.github.io/authproxy/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.20+-326CE5.svg?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+[![Istio](https://img.shields.io/badge/Istio-1.14+-466BB0.svg?logo=istio&logoColor=white)](https://istio.io/)
+[![Helm](https://img.shields.io/badge/Helm-3.0+-0F1689.svg?logo=helm&logoColor=white)](https://helm.sh/)
+[![Documentation](https://img.shields.io/badge/docs-MkDocs-blue.svg?logo=materialformkdocs)](https://ianlintner.github.io/authproxy/)
+[![GitHub](https://img.shields.io/github/stars/ianlintner/authproxy?style=social)](https://github.com/ianlintner/authproxy)
 
-Simple, secure OAuth2 authentication for Kubernetes applications using the **sidecar pattern**. Each application gets its own `oauth2-proxy` container that handles authentication before requests reach your app.
+> Simple, secure OAuth2 authentication for Kubernetes applications using the **sidecar pattern**. 
 
-## ✨ Features
+Each application gets its own `oauth2-proxy` container that handles authentication transparently—no complex configuration needed.
 
-- 🔒 **Secure OAuth2/OIDC** authentication with major providers (GitHub, Google, Azure AD)
-- 🚀 **Simple setup** - no complex Istio ext_authz configuration
-- 🎯 **Isolated** - each app manages its own authentication
-- 🔄 **Portable** - easy to migrate between clusters
-- 🌐 **Built-in SSO** - single sign-on across all apps in your domain
-- 🎨 **Customizable** - brand your sign-in pages
-- 📊 **Observable** - metrics and health checks included
+## ✨ Key Features
+
+- 🔒 **Secure by Default** - OAuth2/OIDC authentication with industry best practices
+- 🎯 **Sidecar Pattern** - Isolated authentication per application
+- 🚀 **Zero Application Changes** - Drop-in authentication for any HTTP service
+- 🌐 **Single Sign-On** - Share sessions across all `*.example.com` apps
+- 🎨 **Customizable UI** - Branded sign-in pages with Tailwind CSS
+- 📊 **Observable** - Prometheus metrics, health checks, audit logs
+- 🔄 **Multi-Provider** - GitHub, Google, Azure AD, Generic OIDC
+- 🛡️ **Security Hardened** - Non-root containers, read-only filesystems, minimal privileges
 
 ## 📚 Documentation
 
-**Full documentation is available at [https://ianlintner.github.io/authproxy/](https://ianlintner.github.io/authproxy/)**
+**📖 Full documentation: [https://ianlintner.github.io/authproxy/](https://ianlintner.github.io/authproxy/)**
 
-Quick links:
-- [Quick Start Guide](https://ianlintner.github.io/authproxy/getting-started/quickstart/)
-- [Architecture Overview](https://ianlintner.github.io/authproxy/architecture/overview/)
-- [Adding Apps Guide](https://ianlintner.github.io/authproxy/guide/adding-apps/)
-- [Configuration Reference](https://ianlintner.github.io/authproxy/reference/configuration/)
+| Topic | Description |
+|-------|-------------|
+| [Quick Start](https://ianlintner.github.io/authproxy/getting-started/quickstart/) | Get running in 5 minutes |
+| [Architecture](https://ianlintner.github.io/authproxy/architecture/overview/) | How it works with diagrams |
+| [Installation](https://ianlintner.github.io/authproxy/getting-started/installation/) | Detailed setup guide |
+| [Adding Apps](https://ianlintner.github.io/authproxy/guide/adding-apps/) | Protect your applications |
+| [OAuth Providers](https://ianlintner.github.io/authproxy/providers/github/) | GitHub, Google, Azure AD |
+| [Configuration](https://ianlintner.github.io/authproxy/reference/configuration/) | All config options |
+| [Troubleshooting](https://ianlintner.github.io/authproxy/guide/troubleshooting/) | Common issues & solutions |
 
 ## 🚀 Quick Start
 
-```bash
-# 1. Install with Helm
-helm install oauth2-sidecar ./helm/oauth2-sidecar \
-  --set domain=example.com \
-  --set oauth.provider=github \
-  --set oauth.clientID=your-client-id \
-  --set oauth.clientSecret=your-client-secret
+### Prerequisites
 
-# 2. Deploy example app
-kubectl apply -k k8s/apps/example-app/
-
-# 3. Visit your app
-open https://example-app.example.com
-```
-
-See the [Quick Start Guide](https://ianlintner.github.io/authproxy/getting-started/quickstart/) for detailed instructions.
-
-## 📋 Prerequisites
-
-- Kubernetes cluster (1.20+) with kubectl access
-- Istio service mesh installed (1.14+)
+- Kubernetes 1.20+ with `kubectl` access
+- Istio 1.14+ service mesh installed
 - Helm 3 installed
-- A domain with DNS access
-- OAuth application registered with your provider
+- Domain with DNS/TLS configured
+- OAuth app registered (e.g., GitHub OAuth App)
 
-## 🏗️ Architecture
+### Install in 3 Steps
 
-```
-User → Istio Gateway → Service (:4180) → Pod
-                                          ├─ oauth2-proxy (:4180)
-                                          └─ your-app (:8080)
-```
+#### 1. Create OAuth Application
 
-The sidecar pattern places `oauth2-proxy` alongside your application:
+<details>
+<summary><b>GitHub</b></summary>
 
-1. All traffic first hits oauth2-proxy on port 4180
-2. oauth2-proxy checks for valid session cookie
-3. If not authenticated → redirects to OAuth provider
-4. If authenticated → proxies request to your app on localhost:8080
-5. User headers are injected for your app to use
+1. Go to GitHub Settings → Developer settings → OAuth Apps
+2. Click **New OAuth App**
+3. Set **Homepage URL**: `https://example.com`
+4. Set **Authorization callback URL**: `https://auth.example.com/oauth2/callback`
+5. Save **Client ID** and generate a **Client Secret**
 
-**Benefits:**
-- ✅ No complex Istio ext_authz configuration
-- ✅ Each app has isolated auth configuration
-- ✅ Easy debugging - logs co-located with app
-- ✅ Flexible - different OAuth providers per app
-- ✅ Portable - apps easily move between clusters
+</details>
 
-See [Architecture Documentation](https://ianlintner.github.io/authproxy/architecture/overview/) for details.
+<details>
+<summary><b>Google</b></summary>
 
-## 🔧 Usage
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create project → APIs & Services → Credentials
+3. Create **OAuth 2.0 Client ID** (Web application)
+4. Add **Authorized redirect URI**: `https://auth.example.com/oauth2/callback`
+5. Save **Client ID** and **Client Secret**
 
-### Using Helm Chart (Recommended)
+</details>
+
+#### 2. Install with Helm
 
 ```bash
+# Clone the repository
+git clone https://github.com/ianlintner/authproxy.git
+cd authproxy
+
+# Install the helm chart
 helm install oauth2-sidecar ./helm/oauth2-sidecar \
   --set domain=example.com \
   --set cookieDomain=.example.com \
   --set oauth.provider=github \
-  --set oauth.clientID=your-client-id \
-  --set oauth.clientSecret=your-client-secret \
-  --set istio.gateway.tls.credentialName=wildcard-tls
+  --set oauth.clientID=Ov23li1234567890abcd \
+  --set oauth.clientSecret=1234567890abcdef1234567890abcdef12345678 \
+  --set istio.gateway.existingGateway=your-gateway \
+  --namespace default
 ```
 
-See [Helm Chart Documentation](https://ianlintner.github.io/authproxy/guide/helm-chart/) for all options.
+<details>
+<summary>Or create a values file</summary>
 
-### Deploying Applications
+```yaml
+# values.yaml
+domain: example.com
+cookieDomain: .example.com
 
-See the complete guide at [Adding Apps](https://ianlintner.github.io/authproxy/guide/adding-apps/).
-
-Quick example - add sidecar to existing app:
+oauth:
+  provider: github
+  clientID: Ov23li1234567890abcd
+  clientSecret: 1234567890abcdef1234567890abcdef12345678
+  
+istio:
+  gateway:
+    existingGateway: your-gateway
+```
 
 ```bash
-./scripts/add-app.sh myapp default 8080 myapp.example.com
+helm install oauth2-sidecar ./helm/oauth2-sidecar \
+  -f values.yaml \
+  --namespace default
 ```
 
-### Accessing User Information
+</details>
 
-Your app receives user information via HTTP headers:
-
-```python
-# Python/Flask example
-from flask import request
-
-@app.route('/')
-def index():
-    email = request.headers.get('X-Auth-Request-Email')
-    user = request.headers.get('X-Auth-Request-User')
-    return f'Hello {user} ({email})!'
-```
-
-Available headers:
-- `X-Auth-Request-User` - Username
-- `X-Auth-Request-Email` - Email address
-- `X-Auth-Request-Preferred-Username` - Preferred username
-- `X-Forwarded-User` - User identifier
-- `X-Forwarded-Email` - Email address
-
-## 📖 Documentation
-
-Comprehensive documentation is available at **[https://ianlintner.github.io/authproxy/](https://ianlintner.github.io/authproxy/)**
-
-### Key Topics
-
-- **[Getting Started](https://ianlintner.github.io/authproxy/getting-started/quickstart/)** - Quick start guide
-- **[Architecture](https://ianlintner.github.io/authproxy/architecture/overview/)** - How it works
-- **[Adding Apps](https://ianlintner.github.io/authproxy/guide/adding-apps/)** - Integrate with your apps
-- **[Configuration](https://ianlintner.github.io/authproxy/reference/configuration/)** - All config options
-- **[OAuth Providers](https://ianlintner.github.io/authproxy/providers/github/)** - Provider setup guides
-- **[Troubleshooting](https://ianlintner.github.io/authproxy/guide/troubleshooting/)** - Common issues
-
-### Building Documentation Locally
+#### 3. Deploy Example Application
 
 ```bash
-# Install dependencies
-pip install -r docs/requirements.txt
+# Deploy the example app
+kubectl apply -k k8s/apps/example-app/
 
-# Serve locally
-mkdocs serve
-
-# Build static site
-mkdocs build
+# Check deployment
+kubectl get pods -l app=example-app
 ```
 
-## 🔒 Supported OAuth Providers
+#### 4. Test It Out
 
-- **GitHub** - [Setup Guide](https://ianlintner.github.io/authproxy/providers/github/)
-- **Google** - [Setup Guide](https://ianlintner.github.io/authproxy/providers/google/)
-- **Azure AD / Microsoft Entra** - [Setup Guide](https://ianlintner.github.io/authproxy/providers/azure-ad/)
-- **OIDC** - [Setup Guide](https://ianlintner.github.io/authproxy/providers/oidc/)
-- And many more supported by oauth2-proxy
+```bash
+# Visit your app (will redirect to GitHub/Google login)
+open https://example-app.example.com
+```
+
+You should see:
+1. **Sign-in page** with your OAuth provider button
+2. **OAuth consent** screen (first time only)
+3. **Your application** - authenticated! 🎉
+
+## 🏗️ Architecture
+
+```
+┌─────────────┐
+│   Browser   │
+└──────┬──────┘
+       │ HTTPS
+       ▼
+┌─────────────────┐
+│  Istio Gateway  │
+│   (TLS Term)    │
+└───────┬─────────┘
+        │
+        ▼
+┌────────────────────────────────┐
+│     Kubernetes Service         │
+│        (port 4180)             │
+└───────┬────────────────────────┘
+        │
+        ▼
+┌────────────────────────────────┐
+│           Pod                  │
+│  ┌──────────────────────────┐ │
+│  │  OAuth2 Proxy Sidecar    │ │
+│  │  :4180                   │ │
+│  └─────────┬────────────────┘ │
+│            │ localhost         │
+│            ▼                   │
+│  ┌──────────────────────────┐ │
+│  │  Your Application        │ │
+│  │  :8080                   │ │
+│  └──────────────────────────┘ │
+└────────────────────────────────┘
+```
+
+### How It Works
+
+1. **Traffic arrives** at Istio Gateway with TLS termination
+2. **VirtualService routes** to Service port 4180
+3. **OAuth2 Proxy sidecar** receives request:
+   - ❌ No cookie? → Redirect to OAuth provider sign-in
+   - ✅ Valid cookie? → Proxy to app on `localhost:8080`
+4. **Application receives** request with injected headers:
+   - `X-Auth-Request-User`: `john.doe`
+   - `X-Auth-Request-Email`: `john.doe@example.com`
+   - `X-Auth-Request-Access-Token`: `gho_xxxx...`
+
+### Why Sidecar Pattern?
+
+| Benefit | Description |
+|---------|-------------|
+| **Simple** | No complex Istio ext_authz or EnvoyFilter configuration |
+| **Isolated** | Each app has its own OAuth configuration |
+| **Debuggable** | Logs and metrics co-located with your app |
+| **Flexible** | Different OAuth providers per application |
+| **Portable** | Easy to migrate apps between clusters |
+
+See [Architecture Documentation](https://ianlintner.github.io/authproxy/architecture/overview/) for detailed diagrams.
+
+## 🔧 Configuration
+
+### OAuth Providers
+
+Configure your OAuth provider in the Helm values:
+
+=== "GitHub"
+    ```yaml
+    oauth:
+      provider: github
+      clientID: Ov23li1234567890
+      clientSecret: your-secret
+      github:
+        org: "my-company"  # Optional: restrict to org
+        team: "engineering"  # Optional: restrict to team
+    ```
+
+=== "Google"
+    ```yaml
+    oauth:
+      provider: google
+      clientID: 1234567890-abc123.apps.googleusercontent.com
+      clientSecret: your-secret
+      google:
+        hostedDomain: "example.com"  # Optional: restrict to domain
+    ```
+
+=== "Azure AD"
+    ```yaml
+    oauth:
+      provider: azure
+      clientID: your-app-id
+      clientSecret: your-secret
+      azure:
+        tenant: your-tenant-id
+    ```
+
+See [OAuth Provider Documentation](https://ianlintner.github.io/authproxy/providers/github/) for detailed setup guides.
+
+### Custom Sign-in Pages
+
+Customize the sign-in page with your branding:
+
+```yaml
+customTemplates:
+  enabled: true
+  brandName: "My Company SSO"
+  logo: "<base64-encoded-logo>"
+```
+
+See [Custom Templates Guide](https://ianlintner.github.io/authproxy/guide/custom-templates/).
+
+### Advanced Configuration
+
+```yaml
+# Session settings
+session:
+  cookieExpire: 168h  # 7 days
+  cookieRefresh: 1h   # Refresh interval
+
+# Email restrictions
+email:
+  domains:
+    - "example.com"
+    - "partner.com"
+
+# Extra arguments to oauth2-proxy
+extraArgs:
+  - --skip-auth-regex=^/health
+  - --ssl-upstream-insecure-skip-verify
+```
+
+Full configuration reference: [Configuration Options](https://ianlintner.github.io/authproxy/reference/configuration/)
+
+## 🚀 Adding Your Applications
+
+### Option 1: Use the Helper Script
+
+```bash
+./scripts/add-app.sh <app-name> <namespace> <app-port> <domain>
+
+# Example:
+./scripts/add-app.sh my-api default 8080 api.example.com
+```
+
+### Option 2: Manual Configuration
+
+Add the oauth2-proxy sidecar to your deployment:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  template:
+    spec:
+      containers:
+      # OAuth2 Proxy sidecar
+      - name: oauth2-proxy
+        image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+        args:
+          - --config=/etc/oauth2-proxy/oauth2_proxy.cfg
+        env:
+          - name: OAUTH2_PROXY_UPSTREAMS
+            value: "http://127.0.0.1:8080"
+        ports:
+          - containerPort: 4180
+        volumeMounts:
+          - name: oauth2-proxy-config
+            mountPath: /etc/oauth2-proxy
+          - name: oauth2-proxy-templates
+            mountPath: /templates
+      
+      # Your application
+      - name: app
+        image: my-app:latest
+        ports:
+          - containerPort: 8080
+      
+      volumes:
+        - name: oauth2-proxy-config
+          configMap:
+            name: oauth2-proxy-sidecar-config
+        - name: oauth2-proxy-templates
+          configMap:
+            name: oauth2-proxy-templates
+```
+
+Complete guide: [Adding Applications](https://ianlintner.github.io/authproxy/guide/adding-apps/)
+
+## 🔍 Accessing User Information
+
+Your application automatically receives user information via HTTP headers:
+
+### Available Headers
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `X-Auth-Request-User` | Username | `john.doe` |
+| `X-Auth-Request-Email` | Email address | `john.doe@example.com` |
+| `X-Auth-Request-Preferred-Username` | Preferred username | `johndoe` |
+| `X-Auth-Request-Access-Token` | OAuth access token | `gho_xxxx...` |
+| `X-Forwarded-User` | User identifier | `john.doe` |
+| `X-Forwarded-Email` | Email address | `john.doe@example.com` |
+| `Authorization` | Bearer token | `Bearer gho_xxxx...` |
+
+### Code Examples
+
+=== "Python / Flask"
+    ```python
+    from flask import Flask, request
+    
+    app = Flask(__name__)
+    
+    @app.route('/')
+    def index():
+        user = request.headers.get('X-Auth-Request-User')
+        email = request.headers.get('X-Auth-Request-Email')
+        return f'Hello {user} ({email})!'
+    
+    @app.route('/admin')
+    def admin():
+        email = request.headers.get('X-Auth-Request-Email')
+        if not email.endswith('@example.com'):
+            return 'Forbidden', 403
+        return 'Admin Panel'
+    ```
+
+=== "Node.js / Express"
+    ```javascript
+    const express = require('express');
+    const app = express();
+    
+    app.get('/', (req, res) => {
+      const user = req.headers['x-auth-request-user'];
+      const email = req.headers['x-auth-request-email'];
+      res.send(`Hello ${user} (${email})!`);
+    });
+    
+    app.get('/admin', (req, res) => {
+      const email = req.headers['x-auth-request-email'];
+      if (!email.endsWith('@example.com')) {
+        return res.status(403).send('Forbidden');
+      }
+      res.send('Admin Panel');
+    });
+    
+    app.listen(8080);
+    ```
+
+=== "Go"
+    ```go
+    package main
+    
+    import (
+        "fmt"
+        "net/http"
+    )
+    
+    func handler(w http.ResponseWriter, r *http.Request) {
+        user := r.Header.Get("X-Auth-Request-User")
+        email := r.Header.Get("X-Auth-Request-Email")
+        fmt.Fprintf(w, "Hello %s (%s)!", user, email)
+    }
+    
+    func main() {
+        http.HandleFunc("/", handler)
+        http.ListenAndServe(":8080", nil)
+    }
+    ```
+
+## 📊 Monitoring & Observability
+
+### Health Checks
+
+OAuth2-proxy exposes health endpoints:
+
+- `GET /ping` - Liveness check
+- `GET /ready` - Readiness check
+
+### Prometheus Metrics
+
+Metrics available at `/metrics`:
+
+```
+oauth2_proxy_requests_total
+oauth2_proxy_authentication_attempts_total
+oauth2_proxy_authentication_failures_total
+oauth2_proxy_cookies_expired_total
+```
+
+### Logs
+
+View sidecar logs:
+
+```bash
+# View oauth2-proxy logs
+kubectl logs -n default <pod-name> -c oauth2-proxy
+
+# View application logs
+kubectl logs -n default <pod-name> -c app
+
+# Follow both
+kubectl logs -n default <pod-name> --all-containers -f
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+<details>
+<summary><b>Redirect loop / Endless redirects</b></summary>
+
+**Cause**: Callback URL mismatch
+
+**Solution**: Ensure callback URL in OAuth provider matches:
+```
+https://auth.example.com/oauth2/callback
+```
+
+Check deployment env var:
+```bash
+kubectl get deployment -o yaml | grep REDIRECT_URL
+```
+
+</details>
+
+<details>
+<summary><b>Cookie not persisting / Sign in every time</b></summary>
+
+**Cause**: Cookie domain mismatch
+
+**Solution**: Verify cookie domain is `.example.com`:
+```bash
+kubectl get configmap oauth2-proxy-sidecar-config -o yaml | grep cookie_domains
+```
+
+</details>
+
+<details>
+<summary><b>404 Not Found on protected paths</b></summary>
+
+**Cause**: VirtualService routing to wrong port
+
+**Solution**: Verify VirtualService routes to port 4180:
+```bash
+kubectl get virtualservice <app-name> -o yaml
+```
+
+Should have:
+```yaml
+destination:
+  host: <app-name>
+  port:
+    number: 4180  # oauth2-proxy port
+```
+
+</details>
+
+<details>
+<summary><b>Connection refused to localhost:8080</b></summary>
+
+**Cause**: Application not listening on localhost
+
+**Solution**: Ensure app container listens on `0.0.0.0:8080` or `127.0.0.1:8080`
+
+</details>
+
+See [Troubleshooting Guide](https://ianlintner.github.io/authproxy/guide/troubleshooting/) for more solutions.
 
 ## 📁 Repository Structure
 
 ```
-├── docs/                    # MkDocs documentation
-│   ├── getting-started/    # Quick start guides
-│   ├── architecture/       # Architecture deep dives with diagrams
-│   ├── guide/              # User guides
-│   ├── providers/          # OAuth provider setup guides
-│   └── reference/          # Configuration reference
-├── helm/
-│   └── oauth2-sidecar/     # Helm chart for installation
-├── k8s/
-│   ├── base/               # Base Kubernetes resources
-│   │   ├── istio/         # Istio Gateway configuration
-│   │   └── oauth2-proxy/  # oauth2-proxy ConfigMaps and templates
-│   └── apps/
-│       └── example-app/    # Complete working example
-├── scripts/
-│   ├── add-app.sh         # Add auth to existing apps
-│   ├── setup.sh           # Initial setup
-│   └── validate.sh        # Validation script
-└── examples/              # Example configurations
-```
-
-## 🛠️ Development
-
-### Local Documentation
-
-Build and serve the documentation locally:
-
-```bash
-pip install -r docs/requirements.txt
-mkdocs serve
-# Visit http://localhost:8000
-```
-
-### Testing
-
-```bash
-# Validate Kubernetes manifests
-./scripts/validate.sh
-
-# Test OAuth flow
-curl -v https://example-app.example.com
-```  
-Adds oauth2-proxy sidecar to existing deployment:
-
-```bash
-./scripts/add-sidecar.sh <app-name> <namespace> <app-port> <domain>
-
-# Example:
-./scripts/add-sidecar.sh myapp default 8080 myapp.cat-herding.net
-```
-
-### validate.sh
-Checks infrastructure is properly configured:
-
-```bash
-./scripts/validate.sh
-```
-
-## 🔍 Troubleshooting
-
-### Check oauth2-proxy sidecar logs
-
-```bash
-kubectl logs -n <namespace> <pod-name> -c oauth2-proxy
-```
-
-### Check app can't be reached
-
-1. Verify VirtualService routes to port 4180:
-   ```bash
-   kubectl get virtualservice <app-name> -o yaml
-   ```
-
-2. Verify Service exposes port 4180:
-   ```bash
-   kubectl get svc <app-name>
-   ```
-
-3. Check oauth2-proxy sidecar is running:
-   ```bash
-   kubectl get pod <pod-name> -o jsonpath='{.spec.containers[*].name}'
-   ```
-
-### Authentication loop / redirect issues
-
-Check OAUTH2_PROXY_REDIRECT_URL matches your domain:
-```bash
-kubectl get deployment <app-name> -o yaml | grep REDIRECT_URL
-```
-
-### Cookie not persisting
-
-Verify cookie domain is `.cat-herding.net` in ConfigMap
-
-## 📚 Documentation
-
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Detailed architecture and design
-- [ADDING_APPS.md](docs/ADDING_APPS.md) - Step-by-step guide for adding auth
-- [SETUP.md](docs/SETUP.md) - Detailed setup instructions
-
-## 🔐 Security Notes
-
-- Cookie secret must be 32 bytes, randomly generated
-- Use HTTPS only (enforced by cookie_secure = true)
-- Session cookies expire after 7 days by default
-- All secrets should be stored in Kubernetes secrets (never commit to git!)
-
-## 📝 License
-
-MIT
-
-### Configure OAuth Provider
-
-Edit `k8s/base/oauth2-proxy/secret.yaml` with your provider credentials:
-
-- **GitHub**: Create OAuth App at https://github.com/settings/developers
-- **Google**: Create OAuth 2.0 Client at https://console.cloud.google.com
-- **Azure AD B2C**: Create app registration in Azure Portal
-- **Auth0**: Create application in Auth0 dashboard
-
-**Callback URL**: `https://auth.cat-herding.net/oauth2/callback`
-
-### Custom Login Experience (Tailwind UI)
-
-This deployment now includes a custom Tailwind CSS powered sign-in page with:
-
-- Modern light/dark theme toggle (persisted to `localStorage`)
-- Provider selection cards (GitHub active; Google, Microsoft, LinkedIn placeholders)
-- Accessible button focus states and subtle motion
-- Friendly error page with retry action
-
-You can customize templates in `k8s/base/oauth2-proxy/templates-configmap.yaml`:
-
-```yaml
-data:
-  sign_in.html: |  # Main login page
-  error.html:   |  # Error page when authentication fails
-```
-
-If you add more providers (by deploying additional `oauth2-proxy` instances or migrating to an identity aggregator), convert the placeholder buttons into active links pointing at the appropriate start endpoints (usually `/oauth2/start` on the provider-specific auth host).
-
-To disable the custom UI (fallback to default): remove these args from the Deployment:
-
-```yaml
-  - --custom-templates-dir=/templates
-  - --skip-provider-button=false
-```
-
-And delete the templates ConfigMap reference in the volumes & mounts.
-
-### Enabling Additional Providers
-
-`oauth2-proxy` supports one provider per instance. Recommended strategies for multi-provider selection:
-
-1. Run multiple `oauth2-proxy` Deployments (e.g. `oauth2-proxy-github`, `oauth2-proxy-google`) each on its own subdomain and update the login page buttons to link directly to those domains.
-2. Use an IdP aggregator (e.g. Auth0, Azure AD B2C) and configure `oauth2-proxy` with `--provider=oidc` to get multiple social logins via a single OIDC issuer.
-3. Introduce an internal "auth selector" microservice that issues redirects to provider-specific ingress hosts.
-
-For option (2), update Deployment args:
-
-```yaml
-  - --provider=oidc
-  - --oidc-issuer-url=https://YOUR_TENANT.b2clogin.com/... (or Auth0/Azure AD issuer)
-```
-
-Then adapt `sign_in.html` to remove individual provider cards (the upstream IdP supplies them).
-
-### Template Iteration Workflow
-
-```bash
-# Edit template ConfigMap
-vim k8s/base/oauth2-proxy/templates-configmap.yaml
-
-# Rebuild manifests locally
-kubectl kustomize k8s/base | grep -n 'sign_in.html' | head
-
-# Apply changes
-kubectl apply -k k8s/base
-
-# Verify pod picked up new template (may require restart if not rolling update)
-kubectl rollout restart deployment/oauth2-proxy -n default
-```
-
-### Dark Mode Default
-
-Set default theme to dark by adding to `<body>` tag class list in `sign_in.html` or pre-seeding `localStorage.setItem('theme','dark')`.
-
-### Security Notes for Custom Templates
-
-| Concern | Mitigation |
-|---------|------------|
-| XSS via template variables | oauth2-proxy only injects controlled context; avoid adding `{{.}}` expansions for untrusted inputs |
-| Assets integrity | Tailwind CDN; if stricter CSP required, self-host a compiled CSS bundle |
-| Spoofed provider buttons | Clearly mark unavailable providers as disabled until implemented |
-
-Make sure you re-run `./scripts/validate.sh auth.cat-herding.net full` after UI changes to confirm no auth regression.
-
-## 📁 Project Structure
-
-```
 authproxy/
+├── docs/                      # MkDocs documentation
+│   ├── getting-started/      # Installation & quick start
+│   ├── architecture/         # Architecture with diagrams
+│   ├── guide/                # User guides
+│   ├── providers/            # OAuth provider setup
+│   └── reference/            # API & config reference
+├── helm/
+│   └── oauth2-sidecar/       # Helm chart
+│       ├── templates/        # Kubernetes templates
+│       ├── values.yaml       # Default values
+│       └── Chart.yaml        # Chart metadata
 ├── k8s/
-│   ├── base/
-│   │   ├── namespace.yaml              # Auth namespace
-│   │   ├── oauth2-proxy/               # Central auth proxy
-│   │   │   ├── deployment.yaml
-│   │   │   ├── service.yaml
-│   │   │   ├── secret.yaml.example
-│   │   │   └── configmap.yaml
-│   │   ├── istio/                      # Istio configuration
-│   │   │   ├── gateway.yaml            # Wildcard gateway
-│   │   │   ├── ext-authz-filter.yaml   # EnvoyFilter for auth
-│   │   │   └── virtualservice-auth.yaml
-│   │   └── rbac/
+│   ├── base/                 # Base resources
+│   │   ├── istio/           # Gateway, VirtualService
+│   │   └── oauth2-proxy/    # ConfigMaps, templates
 │   └── apps/
-│       └── example-app/                # Reference implementation
+│       └── example-app/      # Complete working example
 ├── scripts/
-│   ├── setup.sh                        # Deploy infrastructure
-│   ├── add-app.sh                      # Add auth to new app
-│   └── validate.sh                     # Test auth flow
-└── docs/
-    ├── ARCHITECTURE.md                 # Detailed design
-    ├── SETUP.md                        # Step-by-step guide
-    └── ADDING_APPS.md                  # App integration guide
+│   ├── add-app.sh           # Add auth to existing apps
+│   ├── setup.sh             # Initial cluster setup
+│   └── validate.sh          # Validation checks
+├── examples/                 # Example configurations
+│   └── simple-app/          # Minimal example
+├── mkdocs.yml               # Documentation config
+└── README.md                # This file
 ```
-
-## 🛠️ Scripts
-
-### setup.sh
-Deploys oauth2-proxy, Istio configuration, and validates setup.
-
-```bash
-./scripts/setup.sh
-```
-
-### add-app.sh
-Generates manifests for adding auth to an existing app.
-
-```bash
-./scripts/add-app.sh <app-name> <namespace> <port>
-# Example: ./scripts/add-app.sh chat chat-ns 3000
-```
-
-### validate.sh
-Tests the authentication flow end-to-end.
-
-```bash
-./scripts/validate.sh myapp.cat-herding.net
-```
-
-## 🔍 Troubleshooting
-
-### Check oauth2-proxy logs
-```bash
-kubectl logs -n default -l app=oauth2-proxy -f
-```
-
-### Verify ext_authz filter is active
-```bash
-kubectl get envoyfilter -n istio-system ext-authz -o yaml
-```
-
-### Test auth check endpoint directly
-```bash
-kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
-  curl -v http://oauth2-proxy.default.svc.cluster.local:4180/oauth2/auth
-```
-
-### Check if app has auth enabled
-```bash
-kubectl get deployment -n <namespace> <app> -o jsonpath='{.metadata.labels}'
-```
-
-## 📚 Documentation
-
-- [Architecture Details](docs/ARCHITECTURE.md)
-- [Setup Guide](docs/SETUP.md)
-- [Adding Apps](docs/ADDING_APPS.md)
-
-## 🔒 Security Considerations
-
-- Session cookies are encrypted and HTTP-only
-- Cookie domain is `.cat-herding.net` for SSO
-- TLS required for all endpoints (enforced by Istio)
-- OAuth state parameter prevents CSRF
-- Istio mTLS encrypts service-to-service traffic
-
-## 📊 Monitoring & Logging
-
-oauth2-proxy logs include:
-- User email/identity
-- Requested URL
-- Authentication provider
-- Timestamp and source IP
-
-Forward logs to Azure Monitor or your logging solution:
-
-```bash
-kubectl logs -n default -l app=oauth2-proxy --tail=100 | \
-  jq 'select(.msg == "AuthSuccess" or .msg == "AuthFailure")'
-```
-
-## 🎓 Learn More
-
-- [OAuth2 Proxy Documentation](https://oauth2-proxy.github.io/oauth2-proxy/)
-- [Istio External Authorization](https://istio.io/latest/docs/tasks/security/authorization/authz-custom/)
-- [Envoy ext_authz Filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_authz_filter)
-
-## 📝 License
-
-MIT
 
 ## 🤝 Contributing
 
-Contributions welcome! Please test changes in dev overlay before submitting PRs.
+Contributions are welcome! Please see [Contributing Guide](https://ianlintner.github.io/authproxy/contributing/).
+
+### Development Setup
+
+```bash
+# Clone repository
+git clone https://github.com/ianlintner/authproxy.git
+cd authproxy
+
+# Install documentation dependencies
+pip install -r docs/requirements.txt
+
+# Serve docs locally
+mkdocs serve
+
+# Run validation
+./scripts/validate.sh

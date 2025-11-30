@@ -1,0 +1,46 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          key: ${{ github.ref }}
+          path: .cache
+
+      - name: Install dependencies
+        run: |
+          pip install -r docs/requirements.txt
+
+      - name: Build and deploy docs
+        run: |
+          mkdocs gh-deploy --force
+
+      - name: Summary
+        run: |
+          echo "📚 Documentation deployed to GitHub Pages" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 https://ianlintner.github.io/authproxy/" >> $GITHUB_STEP_SUMMARY
