@@ -1,19 +1,18 @@
+---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namespace: default
 
 resources:
-  # namespace.yaml not needed - using default namespace
+  - namespace.yaml
   - deployment.yaml
   - service.yaml
   - virtualservice.yaml
-  - authorization-policy.yaml
+  - configmap-web.yaml
 
 labels:
   - pairs:
       app.kubernetes.io/name: example-app
-      app.kubernetes.io/managed-by: kustomize
-      app.kubernetes.io/part-of: cat-herding-apps
-    includeSelectors: true
-    includeTemplates: true
+      app.kubernetes.io/component: web-application
+

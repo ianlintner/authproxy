@@ -1,9 +1,7 @@
 ---
-# Using default namespace - no separate namespace needed
-# apiVersion: v1
-# kind: Namespace
-# metadata:
-#   name: example-app
-#   labels:
-#     name: example-app
-#     istio-injection: enabled
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+  labels:
+    istio-injection: enabled

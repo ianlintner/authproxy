@@ -1,0 +1,134 @@
+1. Get the Istio Gateway external IP:
+
+{{- if .Values.istio.enabled }}
+  export GATEWAY_IP=$(kubectl get svc -n {{ .Values.istio.ingressGateway.namespace }} \
+    -l istio=ingressgateway \
+    -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
+  
+  echo "Istio Gateway IP: $GATEWAY_IP"
+  echo "Configure DNS: *.{{ .Values.domain }} -> $GATEWAY_IP"
+{{- end }}
+
+2. OAuth2 Sidecar is configured for provider: {{ .Values.oauth.provider }}
+
+3. To add OAuth2 authentication to an application:
+
+   Add the sidecar container to your Deployment:
+
+   ```yaml
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: my-app
+   spec:
+     template:
+       spec:
+         containers:
+           # Your app container
+           - name: app
+             image: my-app:latest
+             ports:
+               - containerPort: {{ .Values.sidecar.upstreamPort }}
+           
+           # OAuth2 Proxy sidecar
+           - name: oauth2-proxy
+             image: {{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag }}
+             args:
+               - --config=/etc/oauth2-proxy/oauth2_proxy.cfg
+               - --http-address=0.0.0.0:{{ .Values.sidecar.port }}
+             env:
+               - name: OAUTH2_PROXY_CLIENT_ID
+                 valueFrom:
+                   secretKeyRef:
+                     name: {{ include "oauth2-sidecar.secretName" . }}
+                     key: client-id
+               - name: OAUTH2_PROXY_CLIENT_SECRET
+                 valueFrom:
+                   secretKeyRef:
+                     name: {{ include "oauth2-sidecar.secretName" . }}
+                     key: client-secret
+               - name: OAUTH2_PROXY_COOKIE_SECRET
+                 valueFrom:
+                   secretKeyRef:
+                     name: {{ include "oauth2-sidecar.secretName" . }}
+                     key: cookie-secret
+               - name: OAUTH2_PROXY_UPSTREAMS
+                 value: "http://127.0.0.1:{{ .Values.sidecar.upstreamPort }}"
+               - name: OAUTH2_PROXY_REDIRECT_URL
+                 value: "https://my-app.{{ .Values.domain }}/oauth2/callback"
+             ports:
+               - containerPort: {{ .Values.sidecar.port }}
+             volumeMounts:
+               - name: oauth2-config
+                 mountPath: /etc/oauth2-proxy
+                 readOnly: true
+         volumes:
+           - name: oauth2-config
+             configMap:
+               name: {{ .Values.configMapName | default "oauth2-proxy-sidecar-config" }}
+   ```
+
+   Create a Service pointing to the sidecar port:
+
+   ```yaml
+   apiVersion: v1
+   kind: Service
+   metadata:
+     name: my-app
+   spec:
+     selector:
+       app: my-app
+     ports:
+       - port: {{ .Values.sidecar.port }}
+         targetPort: {{ .Values.sidecar.port }}
+   ```
+
+   Create a VirtualService for routing:
+
+   ```yaml
+   apiVersion: networking.istio.io/v1beta1
+   kind: VirtualService
+   metadata:
+     name: my-app
+   spec:
+     hosts:
+       - "my-app.{{ .Values.domain }}"
+     gateways:
+       {{- if .Values.istio.gateway.existingGateway }}
+       - {{ .Values.istio.gateway.existingGateway }}
+       {{- else }}
+       - {{ .Values.istio.ingressGateway.namespace }}/{{ .Values.istio.gateway.name }}
+       {{- end }}
+     http:
+       - match:
+           - uri:
+               prefix: "/"
+         route:
+           - destination:
+               host: my-app
+               port:
+                 number: {{ .Values.sidecar.port }}
+   ```
+
+4. Access your application at: https://my-app.{{ .Values.domain }}
+
+5. For more examples, see: https://github.com/ianlintner/authproxy/tree/main/examples
+
+{{ if not .Values.oauth.clientID }}
+⚠️  WARNING: OAuth client ID not set!
+   Set oauth.clientID and oauth.clientSecret in values.yaml or use --set flags.
+{{ end }}
+
+{{- if not .Values.oauth.existingSecret }}
+{{- if not .Values.oauth.cookieSecret }}
+⚠️  SECURITY: Cookie secret must be generated securely!
+   Generate with: openssl rand -base64 32 | tr -- '+/' '-_'
+   Then set with: --set oauth.cookieSecret="<your-generated-secret>"
+   Or use an existing secret with: --set oauth.existingSecret="<secret-name>"
+{{ end }}
+{{ end }}
+
+{{- if not .Values.istio.gateway.tls.credentialName }}
+⚠️  WARNING: No TLS certificate configured!
+   Set istio.gateway.tls.credentialName to your TLS secret name.
+{{ end }}

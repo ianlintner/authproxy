@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.configMapName | default "oauth2-proxy-sidecar-config" }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "oauth2-sidecar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: configuration
+data:
+  oauth2_proxy.cfg: |
+    # Provider configuration
+    provider = "{{ .Values.oauth.provider }}"
+    
+    # Listen configuration
+    http_address = "0.0.0.0:{{ .Values.sidecar.port }}"
+    
+    # Upstream configuration (set via env var per-pod)
+    # upstreams = ["http://127.0.0.1:{{ .Values.sidecar.upstreamPort }}"]
+    
+    # Cookie configuration for SSO
+    cookie_name = "{{ .Values.session.cookieName }}"
+    cookie_domains = ["{{ .Values.cookieDomain }}"]
+    cookie_secure = {{ .Values.session.cookieSecure }}
+    cookie_httponly = {{ .Values.session.cookieHttpOnly }}
+    cookie_samesite = "{{ .Values.session.cookieSameSite }}"
+    cookie_expire = "{{ .Values.session.cookieExpire }}"
+    cookie_refresh = "{{ .Values.session.cookieRefresh }}"
+    
+    # Email configuration
+    email_domains = [{{ range $i, $domain := .Values.email.domains }}{{if $i}}, {{end}}"{{ $domain }}"{{ end }}]
+    
+    # Pass user information to upstream
+    pass_access_token = true
+    pass_authorization_header = true
+    pass_user_headers = true
+    set_authorization_header = true
+    set_xauthrequest = true
+    
+    # Show custom sign-in page with provider button
+    skip_provider_button = false
+    
+    # Custom templates
+    custom_templates_dir = "/templates"
+    
+    # Reverse proxy configuration
+    reverse_proxy = true

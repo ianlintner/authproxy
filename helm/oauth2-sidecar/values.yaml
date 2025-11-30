@@ -1,0 +1,225 @@
+# OAuth2 Sidecar Configuration
+# Complete reference: https://github.com/ianlintner/authproxy/blob/main/docs/configuration.md
+
+## Domain Configuration
+# Your base domain for applications
+domain: example.com
+
+# Cookie domain for SSO (should start with .)
+# This enables single sign-on across all subdomains
+cookieDomain: .example.com
+
+## OAuth Provider Configuration
+oauth:
+  # Provider type: github, google, azure, oidc
+  provider: github
+  
+  # OAuth application credentials
+  # REQUIRED: Set these values or use existingSecret
+  clientID: ""
+  clientSecret: ""
+  
+  # Cookie secret for encrypting session cookies
+  # REQUIRED: Must be generated using a cryptographically secure method:
+  #   openssl rand -base64 32 | tr -- '+/' '-_'
+  # OR use existingSecret that contains a pre-generated cookie-secret
+  # WARNING: Never use auto-generated secrets in production
+  cookieSecret: ""
+  
+  # Use existing secret instead of creating one
+  # Secret must contain: client-id, client-secret, cookie-secret
+  existingSecret: ""
+  
+  # Provider-specific configuration
+  github:
+    # Optional: Restrict to specific GitHub organization
+    org: ""
+    # Optional: Restrict to specific team (requires org)
+    team: ""
+  
+  google:
+    # Optional: Restrict to Google Workspace domain
+    hostedDomain: ""
+  
+  azure:
+    # Azure AD tenant ID
+    tenant: ""
+    # Optional: Azure AD resource (audience)
+    resource: ""
+  
+  oidc:
+    # OIDC issuer URL
+    issuerURL: ""
+    # Optional: Additional OIDC scopes
+    extraScopes: []
+
+## Istio Configuration
+istio:
+  # Enable Istio integration
+  enabled: true
+  
+  # Gateway configuration
+  gateway:
+    # Create a new Istio Gateway
+    create: true
+    # Gateway name (if creating)
+    name: oauth2-gateway
+    # Use an existing gateway instead
+    existingGateway: ""
+    # Hosts to configure (defaults to *.{domain})
+    hosts:
+      - "*.{{ .Values.domain }}"
+    
+    # TLS configuration
+    tls:
+      # TLS mode: SIMPLE, MUTUAL, PASSTHROUGH
+      mode: SIMPLE
+      # Secret name containing TLS certificate
+      # Must be in the same namespace as the gateway
+      credentialName: ""
+      # Minimum TLS version
+      minProtocolVersion: TLSV1_2
+    
+    # HTTP redirect to HTTPS
+    httpsRedirect: true
+  
+  # Ingress gateway selector
+  ingressGateway:
+    # Istio ingress gateway label selector
+    selector:
+      istio: ingressgateway
+    # Ingress gateway namespace
+    namespace: istio-system
+
+## OAuth2 Proxy Sidecar Configuration
+sidecar:
+  # Container image
+  image:
+    repository: quay.io/oauth2-proxy/oauth2-proxy
+    tag: v7.6.0
+    pullPolicy: IfNotPresent
+  
+  # Resource limits
+  resources:
+    requests:
+      memory: 32Mi
+      cpu: 10m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+  
+  # Listen port (service will route here)
+  port: 4180
+  
+  # Default upstream (application) port
+  # Can be overridden per-application
+  upstreamPort: 8080
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 2000
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+  
+  # Liveness probe
+  livenessProbe:
+    httpGet:
+      path: /ping
+      port: 4180
+      scheme: HTTP
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  # Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /ping
+      port: 4180
+      scheme: HTTP
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+
+## Session Configuration
+session:
+  # Cookie expiry (duration)
+  cookieExpire: 168h  # 7 days
+  
+  # Cookie refresh interval
+  cookieRefresh: 1h
+  
+  # Cookie name
+  cookieName: _oauth2_proxy
+  
+  # Cookie security settings
+  cookieSecure: true
+  cookieHttpOnly: true
+  cookieSameSite: lax
+
+## Email/User Configuration
+email:
+  # Email domains to allow (* for all)
+  domains:
+    - "*"
+
+## Custom Templates
+customTemplates:
+  # Enable custom sign-in and error pages
+  enabled: true
+  
+  # Brand name displayed on pages
+  brandName: "SSO Portal"
+  
+  # Base64-encoded logo (optional)
+  # Leave empty to use default
+  logo: ""
+  
+  # Additional template customizations can be done
+  # by providing your own ConfigMap
+
+## Namespace Configuration
+# Namespace where oauth2-proxy resources are deployed
+namespace: default
+
+## Additional oauth2-proxy Arguments
+# Add any additional oauth2-proxy command-line arguments
+extraArgs: []
+  # - --skip-auth-regex=^/health
+  # - --whitelist-domain=.example.com
+
+## ConfigMap and Secret Names
+# Override default names if needed
+configMapName: oauth2-proxy-sidecar-config
+secretName: oauth2-proxy-secret
+templatesConfigMapName: oauth2-proxy-templates
+
+## Service Account
+serviceAccount:
+  # Create a service account
+  create: true
+  # Service account name
+  name: ""
+  # Annotations for service account
+  annotations: {}
+
+## Pod Annotations
+podAnnotations: {}
+
+## Pod Labels
+podLabels: {}
+
+## Node Selector
+nodeSelector: {}
+
+## Tolerations
+tolerations: []
+
+## Affinity
+affinity: {}

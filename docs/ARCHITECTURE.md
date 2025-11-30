@@ -1,13 +1,14 @@
-# Architecture: SSO Social Login Proxy Gateway
+# Architecture: OAuth2 Sidecar Authentication
 
 ## Overview
 
-This architecture implements a centralized authentication gateway for AKS applications using:
+This architecture implements OAuth2 authentication for AKS applications using a **sidecar pattern**. Each application pod includes an `oauth2-proxy` container that handles authentication before requests reach the application container.
 
-- **Istio** for traffic management and external authorization
-- **oauth2-proxy** as the authentication proxy
-- **Social OAuth providers** (GitHub, Google, LinkedIn, Microsoft)
-- **Cookie-based SSO** across all `*.cat-herding.net` subdomains
+**Key Characteristics:**
+- **Decentralized**: No shared authentication service
+- **Simple**: No complex Istio ext_authz configuration
+- **Isolated**: Each app manages its own authentication
+- **Portable**: Easy to migrate between clusters
 
 ## Architecture Diagram
 
@@ -23,10 +24,9 @@ This architecture implements a centralized authentication gateway for AKS applic
 │                    (AKS Public IP)                                 │
 └──────────────────────────────┬─────────────────────────────────────┘
                                │
-                               │
 ┌──────────────────────────────▼─────────────────────────────────────┐
 │                  Istio Ingress Gateway                             │
-│                  (istio-ingressgateway)                            │
+│                  (aks-istio-ingressgateway-external)               │
 │                                                                    │
 │  ┌──────────────────────────────────────────────────────────┐    │
 │  │  Gateway: *.cat-herding.net                              │    │
@@ -34,84 +34,65 @@ This architecture implements a centralized authentication gateway for AKS applic
 │  │  - HTTP → HTTPS redirect                                 │    │
 │  └──────────────────────────────────────────────────────────┘    │
 │                                                                    │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │  EnvoyFilter: ext_authz                                  │    │
-│  │  - Intercepts ALL requests                               │    │
-│  │  - Calls oauth2-proxy for auth check                     │    │
-│  │  - Path: /oauth2/auth                                    │    │
-│  │  - Forwards auth headers to upstream                     │    │
-│  └───────────────────┬──────────────────────────────────────┘    │
-└──────────────────────┼───────────────────────────────────────────┘
-                       │
-                       │ Auth Check Request
-                       │
-        ┌──────────────▼───────────────┐
-        │                              │
-        │  Is session cookie valid?    │
-        │                              │
-        └──────┬────────────────┬──────┘
-               │                │
-        No     │                │ Yes
-               │                │
-┌──────────────▼─────────────┐  │  ┌────────────────────────────┐
-│  oauth2-proxy              │  │  │  Forward to upstream       │
-│  (auth namespace)          │  │  │  with user headers:        │
-│                            │  │  │  - X-Auth-Request-Email    │
-│  Port 4180: OAuth callback │  │  │  - X-Auth-Request-User     │
-│  Port 4181: Auth check API │  └─▶│  - X-Auth-Request-*        │
-│                            │     └────────────┬───────────────┘
-│  ┌──────────────────────┐ │                  │
-│  │ Cookie: .cat-herding │ │                  │
-│  │ Domain: SSO enabled  │ │                  │
-│  └──────────────────────┘ │                  │
-│                            │                  │
-│  Redirect to OAuth?        │                  │
-└────────────┬───────────────┘                  │
-             │                                  │
-             │ Yes, redirect                    │
-             │                                  │
-┌────────────▼───────────────┐                 │
-│  Social OAuth Provider     │                 │
-│  - GitHub                  │                 │
-│  - Google                  │                 │
-│  - LinkedIn                │                 │
-│  - Microsoft               │                 │
-│                            │                 │
-│  User logs in with social  │                 │
-│  account                   │                 │
-└────────────┬───────────────┘                 │
-             │                                  │
-             │ OAuth callback                   │
-             │                                  │
-┌────────────▼───────────────┐                 │
-│  oauth2-proxy              │                 │
-│  /oauth2/callback          │                 │
-│                            │                 │
-│  - Exchange code for token │                 │
-│  - Create session          │                 │
-│  - Set encrypted cookie    │                 │
-│  - Redirect to original URL│                 │
-└────────────────────────────┘                 │
-                                                │
-                     ┌──────────────────────────▼─────────┐
-                     │  Backend Applications               │
-                     │  (with auth.cat-herding.net/        │
-                     │   enabled: "true" label)            │
-                     │                                     │
-                     │  - chat.cat-herding.net             │
-                     │  - dsa.cat-herding.net              │
-                     │  - example-app.cat-herding.net      │
-                     │                                     │
-                     │  Apps read user identity from       │
-                     │  request headers                    │
-                     └─────────────────────────────────────┘
+│  No ext_authz filter - auth handled by sidecars                   │
+└──────────────────────────────┬────────────────────────────────────┘
+                               │
+                               │ Routes to Service (port 4180)
+                               │
+┌──────────────────────────────▼─────────────────────────────────────┐
+│                       Application Service                          │
+│                       (ClusterIP, port 4180)                       │
+└──────────────────────────────┬─────────────────────────────────────┘
+                               │
+┌──────────────────────────────▼─────────────────────────────────────┐
+│                       Application Pod                              │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────┐        │
+│  │  oauth2-proxy sidecar container                      │        │
+│  │  (port 4180)                                         │        │
+│  │                                                      │        │
+│  │  1. Receives all traffic                            │        │
+│  │  2. Checks session cookie                           │        │
+│  │  3. If not auth → redirect to OAuth                 │        │
+│  │  4. If auth → proxy to localhost:8080               │        │
+│  │  5. Inject user headers                             │        │
+│  └───────────────┬──────────────────────────────────────┘        │
+│                  │                                                │
+│                  │ http://127.0.0.1:8080                         │
+│                  │                                                │
+│  ┌───────────────▼──────────────────────────────────────┐        │
+│  │  Application container                               │        │
+│  │  (port 8080)                                         │        │
+│  │                                                      │        │
+│  │  - Receives authenticated requests                   │        │
+│  │  - Reads user from headers                          │        │
+│  │  - No auth logic needed                             │        │
+│  └──────────────────────────────────────────────────────┘        │
+│                                                                    │
+│  Shared volumes:                                                  │
+│  - oauth2-proxy-config (ConfigMap)                                │
+│  - oauth2-proxy-secret (Secret)                                   │
+└────────────────────────────────────────────────────────────────────┘
+
+                               │
+                               │ OAuth flow (if not authenticated)
+                               │
+┌──────────────────────────────▼─────────────────────────────────────┐
+│  Social OAuth Provider                                             │
+│  - GitHub                                                          │
+│  - Google                                                          │
+│  - Azure AD                                                        │
+│  - LinkedIn                                                        │
+│                                                                    │
+│  User logs in → callback to app → cookie set                      │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Components
 
 ### 1. Istio Ingress Gateway
 
-**Purpose**: Entry point for all external traffic
+**Purpose**: Entry point for all external HTTPS traffic
 
 **Configuration**:
 - **Gateway Resource**: Defines `*.cat-herding.net` hosts
@@ -121,72 +102,418 @@ This architecture implements a centralized authentication gateway for AKS applic
 **Key Features**:
 - Wildcard DNS support
 - Automatic TLS termination
-- HTTP to HTTPS redirection
+- Routes to application services (port 4180)
 
-### 2. EnvoyFilter (ext_authz)
+**No ext_authz filter**: Unlike centralized auth, the gateway simply routes traffic without authentication checks.
 
-**Purpose**: External authorization filter for authentication checks
+### 2. oauth2-proxy Sidecar Container
 
-**Location**: `istio-system` namespace, applied to `istio-ingressgateway`
+**Purpose**: Handle OAuth2 authentication within each application pod
+
+**Configuration** (`k8s/base/oauth2-proxy-sidecar/`):
+- **Image**: `quay.io/oauth2-proxy/oauth2-proxy:v7.6.0`
+- **Port**: 4180 (receives all traffic)
+- **Upstream**: `http://127.0.0.1:8080` (application container)
+- **Config**: Mounted from ConfigMap
+- **Secrets**: OAuth credentials from Secret
+
+**Environment Variables** (per-app):
+```yaml
+- name: OAUTH2_PROXY_REDIRECT_URL
+  value: "https://myapp.cat-herding.net/oauth2/callback"
+- name: OAUTH2_PROXY_UPSTREAMS  
+  value: "http://127.0.0.1:8080"
+```
 
 **How It Works**:
-1. Intercepts every HTTP request at the ingress gateway
-2. Sends authentication check to oauth2-proxy (`/oauth2/auth` endpoint)
-3. If oauth2-proxy returns 2xx: forwards request with user headers
-4. If oauth2-proxy returns 302: sends redirect to client (login flow)
-5. If oauth2-proxy returns error: returns 503 to client
+1. Receives request on port 4180
+2. Checks for valid session cookie (`.cat-herding.net` domain)
+3. **If not authenticated**:
+   - Redirects to OAuth provider
+   - Provider redirects back to `/oauth2/callback`
+   - Sets encrypted session cookie
+   - Redirects to original URL
+4. **If authenticated**:
+   - Proxies request to `localhost:8080` (app container)
+   - Injects user headers
+
+**Headers Injected**:
+- `X-Auth-Request-User` - Username
+- `X-Auth-Request-Email` - Email address
+- `X-Auth-Request-Preferred-Username` - Preferred username
+- `Authorization` - Bearer token (if configured)
+
+### 3. Application Container
+
+**Purpose**: Your application code
+
+**Requirements**:
+- Listen on port 8080 (or configure via `OAUTH2_PROXY_UPSTREAMS`)
+- Read user identity from request headers
+- No authentication logic needed
+
+**Example** (Go):
+```go
+email := r.Header.Get("X-Auth-Request-Email")
+user := r.Header.Get("X-Auth-Request-User")
+```
+
+### 4. Service
+
+**Purpose**: Expose the oauth2-proxy sidecar (port 4180) to Istio
 
 **Configuration**:
 ```yaml
-server_uri: http://oauth2-proxy.auth.svc.cluster.local:4180
-path_prefix: /oauth2/auth
-failure_mode_allow: false  # Deny by default if auth check fails
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp
+spec:
+  ports:
+  - name: proxy
+    port: 4180
+    targetPort: 4180
+  selector:
+    app: myapp
 ```
 
-**Headers Passed to Upstream**:
-- `X-Auth-Request-User`
-- `X-Auth-Request-Email`
-- `X-Auth-Request-Preferred-Username`
-- `Authorization` (if configured)
+**Key Point**: Service routes to port 4180 (oauth2-proxy), not directly to app
 
-### 3. oauth2-proxy
+### 5. VirtualService
 
-**Purpose**: Authentication proxy and session manager
-
-**Deployment**: 2 replicas in `auth` namespace
-
-**Ports**:
-- **4180**: Main HTTP endpoint (OAuth callback, auth checks)
-- **44180**: Metrics endpoint (Prometheus)
+**Purpose**: Route traffic from hostname to Service
 
 **Configuration**:
-- **Provider**: GitHub (configurable for Google, Azure AD B2C, OIDC)
-- **Cookie Domain**: `.cat-herding.net` (enables SSO)
-- **Cookie Expiry**: 7 days (168h)
-- **Cookie Refresh**: 1 hour
-- **Session Storage**: Cookie-based (stateless)
+```yaml
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: myapp
+spec:
+  hosts:
+  - "myapp.cat-herding.net"
+  gateways:
+  - istio-system/main-gateway
+  http:
+  - route:
+    - destination:
+        host: myapp.default.svc.cluster.local
+        port:
+          number: 4180
+```
 
-**Key Features**:
-- Stateless operation (no Redis required)
-- Encrypted session cookies
-- Automatic token refresh
-- Support for multiple OAuth providers
+## Traffic Flow
 
-**Authentication Flow**:
-1. Receives auth check request from Envoy: `GET /oauth2/auth`
-2. Checks if request has valid session cookie
-3. If valid: returns 202 with user headers
-4. If invalid: returns 302 redirect to OAuth provider
-5. User logs in at OAuth provider
-6. OAuth provider redirects to: `https://auth.cat-herding.net/oauth2/callback?code=...`
-7. oauth2-proxy exchanges code for token
-8. Sets encrypted session cookie (domain: `.cat-herding.net`)
-9. Redirects user back to original URL
-10. Subsequent requests include cookie → authenticated
+### First-Time Access (Not Authenticated)
 
-### 4. VirtualServices
+```
+1. User visits https://myapp.cat-herding.net
+   ↓
+2. Istio Gateway (TLS termination)
+   ↓
+3. VirtualService routes to Service:4180
+   ↓
+4. Service routes to Pod oauth2-proxy:4180
+   ↓
+5. oauth2-proxy checks cookie → NOT FOUND
+   ↓
+6. oauth2-proxy returns 302 redirect to GitHub
+   ↓
+7. User logs in at GitHub
+   ↓
+8. GitHub redirects to /oauth2/callback
+   ↓
+9. oauth2-proxy exchanges code for token
+   ↓
+10. oauth2-proxy sets encrypted cookie (.cat-herding.net)
+   ↓
+11. oauth2-proxy returns 302 redirect to original URL
+   ↓
+12. User's browser re-requests with cookie
+```
 
-**Purpose**: Route traffic from hostnames to backend services
+### Subsequent Access (Authenticated)
+
+```
+1. User visits https://myapp.cat-herding.net
+   (Cookie: _oauth2_proxy=encrypted_session)
+   ↓
+2. Istio Gateway (TLS termination)
+   ↓
+3. VirtualService routes to Service:4180
+   ↓
+4. Service routes to Pod oauth2-proxy:4180
+   ↓
+5. oauth2-proxy checks cookie → VALID
+   ↓
+6. oauth2-proxy proxies to localhost:8080
+   (Injects headers: X-Auth-Request-Email, X-Auth-Request-User)
+   ↓
+7. Application container receives request
+   ↓
+8. Application reads user from headers
+   ↓
+9. Application returns response
+   ↓
+10. oauth2-proxy proxies response back to user
+```
+
+## Single Sign-On (SSO)
+
+**How SSO Works Across Apps:**
+
+1. User logs in at `app1.cat-herding.net`
+2. Cookie set with domain `.cat-herding.net`
+3. User visits `app2.cat-herding.net`
+4. Browser automatically sends `.cat-herding.net` cookie
+5. app2's oauth2-proxy sidecar validates cookie
+6. User is authenticated without re-login!
+
+**Requirements for SSO:**
+- All apps use same cookie domain (`.cat-herding.net`)
+- All apps use same OAuth provider and client credentials
+- All apps deploy oauth2-proxy with identical secret
+
+## Comparison: Sidecar vs Centralized
+
+| Aspect | Sidecar Pattern (New) | Centralized ext_authz (Old) |
+|--------|----------------------|----------------------------|
+| **Complexity** | Low - simple pod config | High - Istio ext_authz filter |
+| **Debugging** | Easy - logs in same pod | Hard - separate service |
+| **Isolation** | High - per-app config | Low - shared config |
+| **Performance** | Fast - localhost proxy | Slower - network call |
+| **Portability** | Easy - self-contained | Hard - Istio specific |
+| **Scaling** | Auto - scales with app | Manual - separate deployment |
+| **Failure Impact** | Per-app only | All apps affected |
+
+## Security Considerations
+
+### 1. Cookie Security
+
+- **Domain**: `.cat-herding.net` (enables SSO)
+- **Secure**: true (HTTPS only)
+- **HttpOnly**: true (prevents JavaScript access)
+- **SameSite**: lax (balance security/usability)
+- **Encryption**: AES-256 with cookie secret
+
+### 2. Secret Management
+
+**Required Secrets**:
+- `client-id`: OAuth application ID
+- `client-secret`: OAuth application secret
+- `cookie-secret`: 32-byte random string for cookie encryption
+
+**Best Practices**:
+- Never commit secrets to git
+- Use Kubernetes Secrets or Azure Key Vault
+- Rotate cookie secret periodically
+- Use different OAuth apps per environment (dev/staging/prod)
+
+### 3. Network Security
+
+- All traffic encrypted with TLS
+- oauth2-proxy to app communication on localhost only
+- No external access to app port (8080)
+- Only oauth2-proxy port (4180) exposed via Service
+
+## Configuration Options
+
+### Per-App Customization
+
+Each app can customize via environment variables:
+
+```yaml
+env:
+- name: OAUTH2_PROXY_REDIRECT_URL
+  value: "https://myapp.cat-herding.net/oauth2/callback"
+- name: OAUTH2_PROXY_UPSTREAMS
+  value: "http://127.0.0.1:8080"
+- name: OAUTH2_PROXY_EMAIL_DOMAINS
+  value: "mycompany.com"  # Restrict to specific domain
+```
+
+### Different OAuth Providers
+
+Update ConfigMap to change provider:
+
+```
+provider = "google"
+# OR
+provider = "azure"
+azure_tenant = "your-tenant-id"
+# OR
+provider = "oidc"
+oidc_issuer_url = "https://your-issuer"
+```
+
+### Custom Session Duration
+
+```
+cookie_expire = "24h"    # Session expires after 24 hours
+cookie_refresh = "15m"   # Refresh token every 15 minutes
+```
+
+## Monitoring and Observability
+
+### Logs
+
+View oauth2-proxy sidecar logs:
+```bash
+kubectl logs -n <namespace> <pod-name> -c oauth2-proxy
+```
+
+View application logs:
+```bash
+kubectl logs -n <namespace> <pod-name> -c app
+```
+
+### Metrics
+
+oauth2-proxy exposes Prometheus metrics (if configured):
+- Request counts
+- Authentication success/failure rates
+- Session duration
+- OAuth provider latency
+
+### Health Checks
+
+oauth2-proxy health endpoint:
+```bash
+curl http://localhost:4180/ping
+```
+
+## Deployment Patterns
+
+### Pattern 1: New Application
+
+1. Write your application (no auth logic)
+2. Create Deployment with oauth2-proxy sidecar
+3. Create Service exposing port 4180
+4. Create VirtualService routing to Service:4180
+5. Deploy with `kubectl apply`
+
+See: `k8s/apps/example-app/`
+
+### Pattern 2: Existing Application
+
+1. Use helper script:
+   ```bash
+   ./scripts/add-sidecar.sh myapp default 8080 myapp.cat-herding.net
+   ```
+
+2. Script automatically:
+   - Patches Deployment with sidecar
+   - Updates Service
+   - Creates/updates VirtualService
+
+### Pattern 3: Kustomize
+
+Use Kustomize patches to add sidecar to multiple apps:
+
+```yaml
+patchesStrategicMerge:
+- oauth2-sidecar-patch.yaml
+```
+
+## Troubleshooting
+
+### Issue: Redirect Loop
+
+**Symptom**: Browser keeps redirecting between app and OAuth provider
+
+**Causes**:
+- `OAUTH2_PROXY_REDIRECT_URL` doesn't match actual domain
+- Cookie domain incorrect
+- HTTPS not properly configured
+
+**Fix**:
+```bash
+# Check redirect URL
+kubectl get deployment myapp -o yaml | grep REDIRECT_URL
+
+# Should match: https://myapp.cat-herding.net/oauth2/callback
+```
+
+### Issue: 503 Service Unavailable
+
+**Symptom**: Cannot access application
+
+**Causes**:
+- oauth2-proxy sidecar not running
+- App container not running
+- Service not routing to correct port
+
+**Fix**:
+```bash
+# Check pod status
+kubectl get pods -l app=myapp
+
+# Check both containers are running
+kubectl get pod <pod-name> -o jsonpath='{.status.containerStatuses[*].name}'
+
+# Check Service
+kubectl get svc myapp -o yaml
+# Verify port 4180 is listed
+```
+
+### Issue: User Headers Not Available
+
+**Symptom**: Application can't read user identity
+
+**Causes**:
+- Application reading wrong headers
+- oauth2-proxy not injecting headers
+
+**Fix**:
+```bash
+# Check oauth2-proxy config
+kubectl get configmap oauth2-proxy-sidecar-config -o yaml
+
+# Verify these are set:
+# pass_user_headers = true
+# set_xauthrequest = true
+```
+
+## Migration from Centralized Auth
+
+If migrating from the old centralized ext_authz pattern:
+
+1. **Deploy new infrastructure**:
+   ```bash
+   ./scripts/setup.sh
+   ```
+
+2. **Migrate one app at a time**:
+   ```bash
+   ./scripts/add-sidecar.sh app1 default 8080 app1.cat-herding.net
+   ```
+
+3. **Verify app works** before migrating next
+
+4. **After all apps migrated**, remove old resources:
+   - Delete centralized oauth2-proxy Deployment
+   - Delete ext-authz EnvoyFilter
+   - Delete auth VirtualService
+
+5. **Clean up** old configuration
+
+## Future Enhancements
+
+Possible improvements to this architecture:
+
+1. **Automatic sidecar injection** via mutating webhook
+2. **Shared session store** with Redis for larger deployments
+3. **Custom error pages** per application
+4. **Rate limiting** at oauth2-proxy level
+5. **Multiple OAuth providers** per app (provider selection page)
+6. **Session analytics** and monitoring dashboard
+
+## References
+
+- [oauth2-proxy Documentation](https://oauth2-proxy.github.io/oauth2-proxy/)
+- [Istio Gateway](https://istio.io/latest/docs/reference/config/networking/gateway/)
+- [Kubernetes Sidecar Pattern](https://kubernetes.io/docs/concepts/workloads/pods/#workload-resources-for-managing-pods)
+- [OAuth 2.0 RFC](https://datatracker.ietf.org/doc/html/rfc6749)
 
 **Example**:
 ```yaml

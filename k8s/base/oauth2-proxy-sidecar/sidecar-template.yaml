@@ -1,0 +1,79 @@
+---
+# OAuth2 Proxy Sidecar Container Template
+# 
+# Add this container to your application's pod spec to enable OAuth2 authentication.
+# The sidecar will handle authentication and proxy requests to your app container.
+#
+# Usage:
+#   1. Add this container to your deployment's containers list
+#   2. Customize environment variables (OAUTH2_PROXY_REDIRECT_URL, OAUTH2_PROXY_UPSTREAMS)
+#   3. Mount oauth2-proxy-secret with your OAuth credentials
+#   4. Create a VirtualService that routes traffic to port 4180
+#
+# Example in deployment spec.template.spec.containers:
+#
+# containers:
+# - name: oauth2-proxy
+#   image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+#   imagePullPolicy: IfNotPresent
+#   ports:
+#   - name: proxy
+#     containerPort: 4180
+#     protocol: TCP
+#   env:
+#   # OAuth credentials from secret
+#   - name: OAUTH2_PROXY_CLIENT_ID
+#     valueFrom:
+#       secretKeyRef:
+#         name: oauth2-proxy-secret
+#         key: client-id
+#   - name: OAUTH2_PROXY_CLIENT_SECRET
+#     valueFrom:
+#       secretKeyRef:
+#         name: oauth2-proxy-secret
+#         key: client-secret
+#   - name: OAUTH2_PROXY_COOKIE_SECRET
+#     valueFrom:
+#       secretKeyRef:
+#         name: oauth2-proxy-secret
+#         key: cookie-secret
+#   
+#   # App-specific configuration
+#   - name: OAUTH2_PROXY_REDIRECT_URL
+#     value: "https://myapp.cat-herding.net/oauth2/callback"
+#   - name: OAUTH2_PROXY_UPSTREAMS
+#     value: "http://127.0.0.1:8080"  # Your app's port
+#   
+#   volumeMounts:
+#   - name: oauth2-proxy-config
+#     mountPath: /etc/oauth2-proxy
+#     readOnly: true
+#   
+#   args:
+#   - --config=/etc/oauth2-proxy/oauth2_proxy.cfg
+#   
+#   resources:
+#     requests:
+#       cpu: 50m
+#       memory: 64Mi
+#     limits:
+#       cpu: 200m
+#       memory: 128Mi
+#   
+#   securityContext:
+#     allowPrivilegeEscalation: false
+#     readOnlyRootFilesystem: true
+#     runAsNonRoot: true
+#     runAsUser: 2000
+#     capabilities:
+#       drop:
+#       - ALL
+#
+# volumes:
+# - name: oauth2-proxy-config
+#   configMap:
+#     name: oauth2-proxy-sidecar-config
+#
+# - name: oauth2-proxy-secret
+#   secret:
+#     secretName: oauth2-proxy-secret

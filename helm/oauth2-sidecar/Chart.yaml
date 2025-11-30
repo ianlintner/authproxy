@@ -1,0 +1,21 @@
+apiVersion: v2
+name: oauth2-sidecar
+description: OAuth2 authentication sidecar for Kubernetes applications using oauth2-proxy
+type: application
+version: 1.0.0
+appVersion: "7.6.0"
+keywords:
+  - oauth2
+  - authentication
+  - sso
+  - istio
+  - sidecar
+  - proxy
+home: https://github.com/ianlintner/authproxy
+sources:
+  - https://github.com/ianlintner/authproxy
+  - https://github.com/oauth2-proxy/oauth2-proxy
+maintainers:
+  - name: Ian Lintner
+    email: ian@lintner.com
+icon: https://raw.githubusercontent.com/oauth2-proxy/oauth2-proxy/master/docs/static/img/logos/OAuth2_Proxy_horizontal.svg

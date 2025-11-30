@@ -1,0 +1,38 @@
+# Test values for existing cat-herding.net cluster
+domain: cat-herding.net
+cookieDomain: .cat-herding.net
+
+oauth:
+  provider: github
+  clientID: "Ov23liWQuQFX3j2Vu28b"
+  # Using existing secret instead
+  existingSecret: "oauth2-proxy-secret"
+
+istio:
+  enabled: true
+  gateway:
+    create: false
+    existingGateway: "aks-istio-ingress/cat-herding-gateway"
+  
+  ingressGateway:
+    selector:
+      istio: aks-istio-ingressgateway-external
+    namespace: aks-istio-ingress
+
+sidecar:
+  image:
+    repository: quay.io/oauth2-proxy/oauth2-proxy
+    tag: v7.6.0
+  resources:
+    requests:
+      memory: 32Mi
+      cpu: 10m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+
+# Test upgrade: change cookie expiry
+session:
+  cookieExpire: 48h  # Changed from default 168h
+
+namespace: default

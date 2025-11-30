@@ -1,0 +1,63 @@
+:root {
+  --md-primary-fg-color: #4c51bf;
+  --md-primary-fg-color--light: #6366f1;
+  --md-primary-fg-color--dark: #3730a3;
+  --md-accent-fg-color: #a855f7;
+}
+
+/* Mermaid diagram styling */
+.mermaid {
+  text-align: center;
+  margin: 2em 0;
+}
+
+/* Cards grid for home page */
+.grid.cards {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
+}
+
+/* Custom admonition colors */
+.md-typeset .admonition.backstage,
+.md-typeset details.backstage {
+  border-color: #4c51bf;
+}
+
+.md-typeset .backstage > .admonition-title,
+.md-typeset .backstage > summary {
+  background-color: rgba(76, 81, 191, 0.1);
+  border-color: #4c51bf;
+}
+
+.md-typeset .backstage > .admonition-title::before,
+.md-typeset .backstage > summary::before {
+  background-color: #4c51bf;
+}
+
+/* Code block enhancements */
+.md-typeset code {
+  background-color: var(--md-code-bg-color);
+  border-radius: 0.2rem;
+  padding: 0.1rem 0.3rem;
+}
+
+/* Table styling */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--md-default-fg-color--lightest);
+  font-weight: 600;
+}
+
+/* Sequence diagram improvements */
+.mermaid .sequenceNumber {
+  fill: white;
+}
+
+/* Better spacing for navigation */
+.md-nav__item--nested > .md-nav__link {
+  font-weight: 600;
+}

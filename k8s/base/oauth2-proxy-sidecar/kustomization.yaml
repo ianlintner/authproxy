@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+# Note: Create secret.yaml from secret.yaml.example before applying
+# The secret.yaml file is gitignored to prevent committing credentials
+resources:
+  - secret.yaml
+
+configMapGenerator:
+  - name: oauth2-proxy-sidecar-config
+    files:
+      - oauth2_proxy.cfg=configmap-sidecar.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: oauth2-proxy-sidecar
+      app.kubernetes.io/component: authentication

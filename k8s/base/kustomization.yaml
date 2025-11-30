@@ -4,22 +4,17 @@ kind: Kustomization
 namespace: default
 
 resources:
-  # namespace.yaml not needed - using default namespace
-  - rbac/service-account.yaml
-  - oauth2-proxy/deployment.yaml
-  - oauth2-proxy/service.yaml
-  - oauth2-proxy/configmap.yaml
-  - oauth2-proxy/templates-configmap.yaml
-  # Note: Create secret.yaml from secret.yaml.example before deploying
-  # - oauth2-proxy/secret.yaml
+  # OAuth2 Proxy Sidecar Infrastructure
+  - oauth2-proxy-sidecar/configmap-sidecar.yaml
+  # Note: Create oauth2-proxy-sidecar/secret.yaml from secret.yaml.example before deploying
+  # - oauth2-proxy-sidecar/secret.yaml
+  
+  # Istio Gateway
   - istio/gateway.yaml
-  - istio/virtualservice-auth.yaml
-  - istio/ext-authz-filter.yaml
 
 labels:
   - pairs:
       app.kubernetes.io/managed-by: kustomize
-      app.kubernetes.io/part-of: auth-gateway
-    # Do not mutate selectors; Deployment selectors are immutable after creation
-    # includeSelectors: true  # removed to avoid immutable field change
+      app.kubernetes.io/part-of: oauth2-sidecar-auth
     includeTemplates: true
+
