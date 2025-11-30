@@ -4,10 +4,11 @@ set -euo pipefail
 # add-sidecar.sh - Add OAuth2 proxy sidecar to an existing deployment
 #
 # Usage:
-#   ./scripts/add-sidecar.sh <app-name> <namespace> <app-port> <domain>
+#   ./scripts/add-sidecar.sh <app-name> <namespace> <app-port> <domain> [gateway]
 #
 # Example:
 #   ./scripts/add-sidecar.sh myapp default 8080 myapp.cat-herding.net
+#   ./scripts/add-sidecar.sh myapp default 8080 myapp.cat-herding.net aks-istio-ingress/cat-herding-gateway
 #
 # This script will:
 #   1. Validate the deployment exists
@@ -20,6 +21,8 @@ APP_NAME="${1:-}"
 NAMESPACE="${2:-default}"
 APP_PORT="${3:-8080}"
 DOMAIN="${4:-}"
+# Default gateway - update this to match your cluster's gateway
+GATEWAY="${5:-aks-istio-ingress/cat-herding-gateway}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -42,7 +45,7 @@ warn() {
 
 # Validate inputs
 if [[ -z "$APP_NAME" ]]; then
-    error "App name is required. Usage: $0 <app-name> <namespace> <app-port> <domain>"
+    error "App name is required. Usage: $0 <app-name> <namespace> <app-port> <domain> [gateway]"
 fi
 
 if [[ -z "$DOMAIN" ]]; then
@@ -185,7 +188,7 @@ spec:
   hosts:
   - "$DOMAIN"
   gateways:
-  - istio-system/main-gateway
+  - $GATEWAY
   http:
   - match:
     - uri:

@@ -71,13 +71,17 @@ Get the secret name
 {{- end }}
 
 {{/*
-Generate cookie secret if not provided
+Get cookie secret - requires either oauth.cookieSecret or oauth.existingSecret
+SECURITY: Do not use auto-generated secrets in production.
+Generate with: openssl rand -base64 32 | tr -- '+/' '-_'
 */}}
 {{- define "oauth2-sidecar.cookieSecret" -}}
 {{- if .Values.oauth.cookieSecret }}
 {{- .Values.oauth.cookieSecret }}
+{{- else if .Values.oauth.existingSecret }}
+{{- /* When using existingSecret, cookie-secret should be in that secret */ -}}
 {{- else }}
-{{- randAlphaNum 32 | b64enc }}
+{{- fail "SECURITY ERROR: oauth.cookieSecret is required when not using oauth.existingSecret. Generate with: openssl rand -base64 32 | tr -- '+/' '-_'" }}
 {{- end }}
 {{- end }}
 

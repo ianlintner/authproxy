@@ -90,9 +90,9 @@ spec:
         - name: oauth2-proxy-templates
           mountPath: /templates
           readOnly: true
-      # Application container
+      # Application container (using nginx-unprivileged for security)
       - name: app
-        image: nginx:1.25
+        image: nginxinc/nginx-unprivileged:1.25
         ports:
         - name: http
           containerPort: 8080
@@ -117,18 +117,13 @@ spec:
             cpu: 200m
             memory: 128Mi
         securityContext:
-          runAsNonRoot: false
-          runAsUser: 0
+          runAsNonRoot: true
+          runAsUser: 101
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
             - ALL
-            add:
-            - CHOWN
-            - SETGID
-            - SETUID
-            - NET_BIND_SERVICE
         volumeMounts:
         - name: nginx-config
           mountPath: /etc/nginx/conf.d/default.conf
@@ -142,6 +137,8 @@ spec:
           mountPath: /var/cache/nginx
         - name: nginx-run
           mountPath: /var/run
+        - name: nginx-tmp
+          mountPath: /tmp
       volumes:
       - name: oauth2-proxy-config
         configMap:
@@ -158,4 +155,6 @@ spec:
       - name: nginx-cache
         emptyDir: {}
       - name: nginx-run
+        emptyDir: {}
+      - name: nginx-tmp
         emptyDir: {}
