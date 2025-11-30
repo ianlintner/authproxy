@@ -119,6 +119,15 @@
    Set oauth.clientID and oauth.clientSecret in values.yaml or use --set flags.
 {{ end }}
 
+{{- if not .Values.oauth.existingSecret }}
+{{- if not .Values.oauth.cookieSecret }}
+⚠️  SECURITY: Cookie secret must be generated securely!
+   Generate with: openssl rand -base64 32 | tr -- '+/' '-_'
+   Then set with: --set oauth.cookieSecret="<your-generated-secret>"
+   Or use an existing secret with: --set oauth.existingSecret="<secret-name>"
+{{ end }}
+{{ end }}
+
 {{- if not .Values.istio.gateway.tls.credentialName }}
 ⚠️  WARNING: No TLS certificate configured!
    Set istio.gateway.tls.credentialName to your TLS secret name.

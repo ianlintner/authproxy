@@ -1,5 +1,6 @@
 # Secrets
 k8s/base/oauth2-proxy/secret.yaml
+k8s/base/oauth2-proxy-sidecar/secret.yaml
 k8s/overlays/*/secret.yaml
 *.secret.yaml
 

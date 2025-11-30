@@ -20,7 +20,10 @@ oauth:
   clientSecret: ""
   
   # Cookie secret for encrypting session cookies
-  # Auto-generated if empty (not recommended for production)
+  # REQUIRED: Must be generated using a cryptographically secure method:
+  #   openssl rand -base64 32 | tr -- '+/' '-_'
+  # OR use existingSecret that contains a pre-generated cookie-secret
+  # WARNING: Never use auto-generated secrets in production
   cookieSecret: ""
   
   # Use existing secret instead of creating one

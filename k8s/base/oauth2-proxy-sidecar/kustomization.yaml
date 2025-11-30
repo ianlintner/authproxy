@@ -4,6 +4,8 @@ kind: Kustomization
 
 namespace: default
 
+# Note: Create secret.yaml from secret.yaml.example before applying
+# The secret.yaml file is gitignored to prevent committing credentials
 resources:
   - secret.yaml
 
